@@ -29,14 +29,22 @@ struct TimestampFormatterTests {
         #expect(result == "45m ago")
     }
 
-    @Test func todayTwoHoursAgoReturnsTimeString() {
-        let timestamp = ms(secondsAgo: 2 * 3600)
+    @Test func todayEarlierReturnsTimeString() {
+        // Use an absolute time anchored to start of today + 90 min so the result
+        // is always "today, earlier" regardless of when the test runs.
+        // Skip if < 2h into the current day to avoid false "Yesterday" results.
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        guard now.timeIntervalSince(startOfToday) > 2 * 3600 else { return }
+
+        let earlier = startOfToday.addingTimeInterval(3600)  // 1:00 AM today
+        let timestamp = Int64(earlier.timeIntervalSince1970 * 1000)
         let result = TimestampFormatter.relativeString(from: timestamp)
         // Check it matches time format, not "ago", not "Just now", not "Yesterday"
         #expect(!result.contains("ago"))
         #expect(result != "Just now")
         #expect(result != "Yesterday")
-        // Check it matches the pattern of "h:mm a" (e.g., "2:30 PM")
         let timePattern = try! NSRegularExpression(pattern: "\\d{1,2}:\\d{2}", options: [])
         let range = NSRange(result.startIndex..<result.endIndex, in: result)
         let matches = timePattern.matches(in: result, options: [], range: range)
