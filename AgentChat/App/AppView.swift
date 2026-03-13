@@ -9,14 +9,17 @@ struct AppView: View {
     var body: some View {
         @Bindable var router = router
         NavigationStack(path: $router.path) {
-            Text("Chats — Phase 6 coming soon")
-                .navigationTitle("Chats")
-                .navigationDestination(for: AppRoute.self) { route in
-                    switch route {
-                    case .chatDetail(let chatId):
-                        Text("Chat Detail: \(chatId) — Phase 7 coming soon")
-                    }
+            ChatListView(
+                chatRepository: chatRepository,
+                messageRepository: messageRepository,
+                router: router
+            )
+            .navigationDestination(for: AppRoute.self) { route in
+                switch route {
+                case .chatDetail(let chatId):
+                    Text("Chat Detail: \(chatId) — Phase 7 coming soon")
                 }
+            }
         }
     }
 }
