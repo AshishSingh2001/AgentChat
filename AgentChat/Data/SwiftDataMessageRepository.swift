@@ -1,0 +1,49 @@
+import Foundation
+import SwiftData
+
+@ModelActor
+final actor SwiftDataMessageRepository: MessageRepositoryProtocol {
+    func fetchMessages(for chatId: String) async throws -> [Message] {
+        let targetChatId = chatId
+        let predicate = #Predicate<MessageEntity> { $0.chatId == targetChatId }
+        let descriptor = FetchDescriptor<MessageEntity>(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.timestamp, order: .forward)]
+        )
+        let entities = try modelContext.fetch(descriptor)
+        return entities.map { $0.toMessage() }
+    }
+
+    func insert(_ message: Message) async throws {
+        let entity = MessageEntity.from(message)
+        modelContext.insert(entity)
+
+        // Update parent chat's lastMessage and lastMessageTimestamp
+        let targetChatId = message.chatId
+        let chatPredicate = #Predicate<ChatEntity> { $0.id == targetChatId }
+        var chatDescriptor = FetchDescriptor<ChatEntity>(predicate: chatPredicate)
+        chatDescriptor.fetchLimit = 1
+        if let chatEntity = try modelContext.fetch(chatDescriptor).first {
+            chatEntity.lastMessage = message.text
+            chatEntity.lastMessageTimestamp = message.timestamp
+            chatEntity.updatedAt = message.timestamp
+        }
+
+        try save()
+    }
+
+    func deleteAll(for chatId: String) async throws {
+        let targetChatId = chatId
+        let predicate = #Predicate<MessageEntity> { $0.chatId == targetChatId }
+        let descriptor = FetchDescriptor<MessageEntity>(predicate: predicate)
+        let entities = try modelContext.fetch(descriptor)
+        for entity in entities {
+            modelContext.delete(entity)
+        }
+        try save()
+    }
+
+    private func save() throws {
+        try modelContext.save()
+    }
+}
