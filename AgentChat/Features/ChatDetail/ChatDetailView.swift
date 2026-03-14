@@ -20,12 +20,11 @@ struct ChatDetailView: View {
     }
 
     var body: some View {
-        @Bindable var vm = viewModel
         let title = viewModel.displayTitle
         VStack(spacing: 0) {
             MessageListView(viewModel: viewModel, fileStorageService: viewModel.fileStorageService)
             InputBarView(
-                text: $vm.draftText,
+                text: viewModel.binding(for: \.draftText),
                 onSend: {
                     Task { await viewModel.sendMessage(text: viewModel.draftText) }
                 },
@@ -54,7 +53,7 @@ struct ChatDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $vm.isTitleEditing) {
+        .sheet(isPresented: viewModel.binding(for: \.isTitleEditing)) {
             TitleEditSheet(
                 title: viewModel.chat.title,
                 onCommit: { newTitle in
@@ -63,7 +62,7 @@ struct ChatDetailView: View {
             )
             .presentationDetents([.height(160)])
         }
-        .fullScreenCover(item: $vm.selectedImageForViewer) { item in
+        .fullScreenCover(item: viewModel.binding(for: \.selectedImageForViewer)) { item in
             ImageViewerView(item: item) {
                 viewModel.dismissImageViewer()
             }

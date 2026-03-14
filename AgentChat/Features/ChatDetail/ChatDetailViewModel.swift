@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import UIKit
 
 @Observable
@@ -119,6 +120,24 @@ final class ChatDetailViewModel {
     func saveDraftImmediately() {
         draftSaveTask?.cancel()
         saveDraftText()
+    }
+
+    // MARK: - Binding Helper
+
+    func binding<Value>(
+        for keyPath: ReferenceWritableKeyPath<ChatDetailViewModel, Value>,
+        setter: ((Value) -> Void)? = nil
+    ) -> Binding<Value> {
+        Binding(
+            get: { self[keyPath: keyPath] },
+            set: { value in
+                if let setter {
+                    setter(value)
+                } else {
+                    self[keyPath: keyPath] = value
+                }
+            }
+        )
     }
 
     // MARK: - Sending
