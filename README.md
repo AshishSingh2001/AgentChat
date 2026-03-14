@@ -1,14 +1,14 @@
 # AgentChat
 
-An offline-first multi-chat iOS app where users converse with a simulated AI agent. Built with SwiftUI + SwiftData
+An offline-first multi-chat iOS app where users converse with a simulated AI agent. Built with SwiftUI + SwiftData.
 
 ---
 
 ## Setup
 
 1. Clone the repo
-2. Open `AgentChat.xcodeproj` in Xcode
-3. Select the `AgentChat` scheme and any iPhone simulator (iOS 17+)
+2. Open `AgentChat.xcodeproj` in Xcode 26+
+3. Select the `AgentChat` scheme and any iPhone simulator (iOS 26.2+)
 4. Run — seed data loads automatically on first launch
 
 No external setup required. SDWebImageSwiftUI is fetched automatically via Swift Package Manager.
@@ -19,9 +19,13 @@ No external setup required. SDWebImageSwiftUI is fetched automatically via Swift
 
 **Clean Architecture + MVVM**, with feature-first folder organisation.
 
-| Presentation | Domain | Data |
-|---|---|---|
-| Views + ViewModels | UseCases + Models + Protocols | SwiftData Entities + Repos |
+```
+Presentation (Views + ViewModels)    @MainActor
+       ↓ depends on
+Domain (UseCases + Models + Protocols)    pure Swift
+       ↓ depends on
+Data (SwiftData Entities + Repositories)  @ModelActor
+```
 
 ### Layers
 
@@ -37,7 +41,7 @@ No external setup required. SDWebImageSwiftUI is fetched automatically via Swift
 
 - Repositories: `@ModelActor` — safe SwiftData access, returns `Sendable` domain structs
 - ViewModels: `@MainActor` — drives SwiftUI state
-- Domain structs: `Sendable` — cross the actor boundary safely
+- Domain structs: fully immutable (`let` properties), `Sendable` — cross the actor boundary safely
 
 ### Navigation
 
@@ -57,18 +61,20 @@ Simple CRUD reads/deletes go directly from ViewModel to repository.
 
 ## Features
 
-- **Chat list** — sorted by last message timestamp, smart relative timestamps, swipe-to-delete with confirmation
-- **Chat detail** — message bubbles (user right/blue, agent left/gray), auto-scroll with 150px threshold, "↓ New message" toast
-- **AI agent** — replies every 4-5 messages after 1-2s delay; 70% text, 30% image; debounced on rapid sends
-- **Image messages** — send from gallery or camera; stored locally in Documents; fullscreen viewer with pinch-to-zoom
+- **Chat list** — sorted by last message timestamp, smart relative timestamps, swipe-to-delete, draft preview
+- **Chat detail** — message bubbles (user right/blue, agent left/gray), auto-scroll with 150px threshold, "New message" toast
+- **AI agent** — replies after every user message (1-2s delay); randomly text or image; debounced on rapid sends
+- **Image messages** — send from gallery or camera with preview; stored locally in Documents; fullscreen viewer with pinch-to-zoom and swipe-to-dismiss
 - **Offline-first** — all data local via SwiftData; loads instantly with no loading states
-- **Bonus** — editable chat title, draft persistence per chat, empty states
+- **Empty states** — chat list and chat detail show helpful prompts when empty
+- **Error states** — failed image loads show a broken-image icon with "Image unavailable" caption
+- **Bonus** — editable chat title (tap nav bar), draft persistence per chat
 
 ---
 
 ## Testing
 
-Swift Testing framework. Tests cover:
+Swift Testing framework. Run with Cmd+U in Xcode. Tests cover:
 
 - Domain model invariants (`Chat`, `Message`, `FileAttachment`)
 - `@ModelActor` repositories via in-memory `ModelContainer`
@@ -83,8 +89,25 @@ Nothing in unit tests touches the real SwiftData store or filesystem.
 
 ## Assumptions
 
-- Agent reply trigger: counter resets on rapid sends (<1.5s apart) — prevents reply spam
-- Chat title: auto-set from first 30 chars of user's first message; editable at any time after
-- File paths stored relative (filename only), resolved to absolute on display — survives reinstall
+- Agent always replies to user messages — cancelled and re-scheduled on rapid sends (<1.5s)
+- Chat title: auto-set from first 30 chars of user's first message; editable at any time
+- File paths stored relative (filename only), resolved to absolute on display — portable across reinstalls
 - Chats 2 & 3 in seed data have generated messages so they are not empty on first open
-- Image viewer presented modally (fullScreenCover), matching platform convention (iMessage, WhatsApp)
+- Image viewer presented modally (fullScreenCover), matching platform convention
+- Scroll threshold of 150px from bottom for auto-scroll vs toast notification
+
+---
+
+## Build
+
+```bash
+# Simulator build
+xcodebuild -project AgentChat.xcodeproj -scheme AgentChat \
+  -destination "platform=iOS Simulator,name=iPhone 17 Pro" build
+
+# Run tests
+xcodebuild -project AgentChat.xcodeproj -scheme AgentChat \
+  -destination "platform=iOS Simulator,name=iPhone 17 Pro" test
+```
+
+> **Note:** Archive/IPA requires a signing identity. This project is configured for simulator builds.

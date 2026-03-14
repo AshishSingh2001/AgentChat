@@ -7,6 +7,15 @@ struct MessageListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
+                if viewModel.messages.isEmpty {
+                    ContentUnavailableView(
+                        "No Messages",
+                        systemImage: "bubble.left",
+                        description: Text("Send a message to begin")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 100)
+                }
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.messages) { message in
                         MessageBubbleView(
