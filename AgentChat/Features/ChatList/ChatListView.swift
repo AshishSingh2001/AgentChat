@@ -18,7 +18,10 @@ struct ChatListView: View {
 
     var body: some View {
         Group {
-            if viewModel.chats.isEmpty {
+            if viewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewModel.chats.isEmpty {
                 ContentUnavailableView(
                     "No Conversations",
                     systemImage: "bubble.left.and.bubble.right",
@@ -62,8 +65,11 @@ struct ChatListView: View {
         .onChange(of: router.path.count) {
             Task { await viewModel.loadChats() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .seedDataLoaded)) { _ in
-            Task { await viewModel.loadChats() }
+        .task(id: viewModel.chats.isEmpty) {
+            if viewModel.chats.isEmpty && !viewModel.isLoading {
+                try? await Task.sleep(for: .milliseconds(500))
+                await viewModel.loadChats()
+            }
         }
     }
 }

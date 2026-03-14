@@ -4,10 +4,12 @@ import Foundation
 @MainActor
 final class ChatListViewModel {
     var chats: [Chat] = []
+    var isLoading = true
 
     private let chatRepository: any ChatRepositoryProtocol
     private let messageRepository: any MessageRepositoryProtocol
     private let createChatUseCase: CreateChatUseCase
+    private let deleteChatUseCase: DeleteChatUseCase
     private let router: any AppRouterProtocol
 
     init(
@@ -18,11 +20,14 @@ final class ChatListViewModel {
         self.chatRepository = chatRepository
         self.messageRepository = messageRepository
         self.createChatUseCase = CreateChatUseCase(chatRepository: chatRepository)
+        self.deleteChatUseCase = DeleteChatUseCase(chatRepository: chatRepository, messageRepository: messageRepository)
         self.router = router
     }
 
     func loadChats() async {
+        isLoading = true
         chats = (try? await chatRepository.fetchAll()) ?? []
+        isLoading = false
     }
 
     func createNewChat() async {
@@ -32,9 +37,7 @@ final class ChatListViewModel {
     }
 
     func deleteChat(_ chat: Chat) async {
-        // Update UI atomically before yielding to avoid collection view inconsistency
         chats.removeAll { $0.id == chat.id }
-        try? await chatRepository.delete(id: chat.id)
-        try? await messageRepository.deleteAll(for: chat.id)
+        try? await deleteChatUseCase.execute(chatId: chat.id)
     }
 }

@@ -65,4 +65,11 @@ struct ChatListViewModelTests {
         await vm.loadChats()
         #expect(vm.chats.count == 1)
     }
+
+    @Test func isLoadingStartsTrueBecomsesFalseAfterLoad() async throws {
+        let (vm, _, _, _) = makeVM()
+        #expect(vm.isLoading == true)
+        await vm.loadChats()
+        #expect(vm.isLoading == false)
+    }
 }
