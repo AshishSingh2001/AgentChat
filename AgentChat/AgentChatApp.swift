@@ -14,9 +14,9 @@ struct AgentChatApp: App {
                 fileStorageService: fileStorageService
             )
             .environment(router)
-            .onAppear {
+            .task {
                 let isUITesting = ProcessInfo.processInfo.arguments.contains("--uitesting-reset")
-                persistence.seedInBackground(resetForTesting: isUITesting)
+                await persistence.seed(resetForTesting: isUITesting)
             }
         }
     }

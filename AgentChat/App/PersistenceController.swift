@@ -1,9 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Owns the ModelContainer, vends repositories, and seeds data in the background.
-/// App launch is never blocked — seeding runs asynchronously and notifies via
-/// `Notification.Name.seedDataLoaded` when complete.
+/// Owns the ModelContainer and vends repositories.
 @MainActor
 final class PersistenceController {
     let container: ModelContainer
@@ -20,11 +18,10 @@ final class PersistenceController {
         messageRepository = SwiftDataMessageRepository(modelContainer: container)
     }
 
-    /// Seeds data in the background. Never blocks the caller.
-    /// Posts `.seedDataLoaded` when done so the chat list can reload.
-    func seedInBackground(resetForTesting: Bool = false) {
+    /// Seeds data. Awaitable: caller can wait for completion before proceeding.
+    func seed(resetForTesting: Bool = false) async {
         let container = self.container
-        Task.detached {
+        await Task.detached {
             let seeder = SeedDataLoader(modelContainer: container)
             if resetForTesting {
                 UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
@@ -32,13 +29,6 @@ final class PersistenceController {
             } else {
                 try? await seeder.loadIfNeeded()
             }
-            await MainActor.run {
-                NotificationCenter.default.post(name: .seedDataLoaded, object: nil)
-            }
-        }
+        }.value
     }
-}
-
-extension Notification.Name {
-    static let seedDataLoaded = Notification.Name("agentchat.seedDataLoaded")
 }
