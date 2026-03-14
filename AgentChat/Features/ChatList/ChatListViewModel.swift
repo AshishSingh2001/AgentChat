@@ -4,7 +4,6 @@ import Foundation
 @MainActor
 final class ChatListViewModel {
     var chats: [Chat] = []
-    var chatPendingDeletion: Chat?
 
     private let chatRepository: any ChatRepositoryProtocol
     private let messageRepository: any MessageRepositoryProtocol
@@ -32,19 +31,10 @@ final class ChatListViewModel {
         router.push(.chatDetail(chatId: chat.id))
     }
 
-    func requestDeleteChat(_ chat: Chat) {
-        chatPendingDeletion = chat
-    }
-
-    func confirmDeleteChat() async {
-        guard let chat = chatPendingDeletion else { return }
+    func deleteChat(_ chat: Chat) async {
+        // Update UI atomically before yielding to avoid collection view inconsistency
+        chats.removeAll { $0.id == chat.id }
         try? await chatRepository.delete(id: chat.id)
         try? await messageRepository.deleteAll(for: chat.id)
-        chats.removeAll { $0.id == chat.id }
-        chatPendingDeletion = nil
-    }
-
-    func cancelDeleteChat() {
-        chatPendingDeletion = nil
     }
 }

@@ -11,6 +11,14 @@ final actor SwiftDataChatRepository: ChatRepositoryProtocol {
         return entities.map { $0.toChat() }
     }
 
+    func fetch(id: String) async throws -> Chat? {
+        let chatId = id
+        let predicate = #Predicate<ChatEntity> { $0.id == chatId }
+        var descriptor = FetchDescriptor<ChatEntity>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        return try modelContext.fetch(descriptor).first?.toChat()
+    }
+
     func create(_ chat: Chat) async throws {
         let entity = ChatEntity.from(chat)
         modelContext.insert(entity)

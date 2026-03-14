@@ -46,35 +46,15 @@ struct ChatListViewModelTests {
         #expect(vm.chats.count == 1)
     }
 
-    @Test func requestDeleteSetsState() {
-        let (vm, _, _, _) = makeVM()
-        let chat = Chat(id: "x", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
-        vm.requestDeleteChat(chat)
-        #expect(vm.chatPendingDeletion?.id == "x")
-    }
-
-    @Test func confirmDeleteRemovesChatAndClearsState() async throws {
+    @Test func deleteChatRemovesFromListAndRepo() async throws {
         let (vm, chatRepo, msgRepo, _) = makeVM()
         let chat = Chat(id: "x", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         chatRepo.chats = [chat]
         await vm.loadChats()
-        vm.requestDeleteChat(chat)
-        await vm.confirmDeleteChat()
+        await vm.deleteChat(chat)
         #expect(vm.chats.isEmpty)
-        #expect(vm.chatPendingDeletion == nil)
         #expect(chatRepo.deletedId == "x")
         #expect(msgRepo.deletedChatIds.contains("x"))
-    }
-
-    @Test func cancelDeleteLeavesChatsUnchanged() async throws {
-        let (vm, chatRepo, _, _) = makeVM()
-        let chat = Chat(id: "x", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
-        chatRepo.chats = [chat]
-        await vm.loadChats()
-        vm.requestDeleteChat(chat)
-        vm.cancelDeleteChat()
-        #expect(vm.chats.count == 1)
-        #expect(vm.chatPendingDeletion == nil)
     }
 
     @Test func reloadAfterNavPopReflectsLatestData() async throws {

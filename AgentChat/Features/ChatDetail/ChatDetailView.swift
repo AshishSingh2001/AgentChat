@@ -2,49 +2,59 @@ import SwiftUI
 
 struct ChatDetailView: View {
     @State private var viewModel: ChatDetailViewModel
-    let fileStorageService: FileStorageService
 
     init(
-        chat: Chat,
+        chatId: String,
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
         fileStorageService: FileStorageService
     ) {
         _viewModel = State(initialValue: ChatDetailViewModel(
-            chat: chat,
+            chatId: chatId,
             chatRepository: chatRepository,
             messageRepository: messageRepository,
-            router: router
+            router: router,
+            fileStorageService: fileStorageService
         ))
-        self.fileStorageService = fileStorageService
     }
 
     var body: some View {
         @Bindable var vm = viewModel
+        let title = viewModel.displayTitle
         VStack(spacing: 0) {
-            MessageListView(viewModel: viewModel, fileStorageService: fileStorageService)
-            InputBarView(text: $vm.draftText) {
-                Task { await viewModel.sendMessage(text: viewModel.draftText) }
-            }
+            MessageListView(viewModel: viewModel, fileStorageService: viewModel.fileStorageService)
+            InputBarView(
+                text: $vm.draftText,
+                onSend: {
+                    Task { await viewModel.sendMessage(text: viewModel.draftText) }
+                },
+                onAttachmentPicked: { data, image in
+                    viewModel.setPendingAttachment(PendingAttachment(data: data, previewImage: image))
+                },
+                onSendWithAttachment: {
+                    Task { await viewModel.sendWithAttachment() }
+                },
+                pendingAttachment: viewModel.pendingAttachment,
+                onClearAttachment: {
+                    viewModel.clearPendingAttachment()
+                }
+            )
         }
-        .navigationTitle(viewModel.chat.title)
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Button {
                     viewModel.startTitleEdit()
                 } label: {
-                    Text(viewModel.chat.title)
+                    Text(title)
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
             }
         }
-        .sheet(isPresented: Binding(
-            get: { viewModel.isTitleEditing },
-            set: { if !$0 { viewModel.isTitleEditing = false } }
-        )) {
+        .sheet(isPresented: $vm.isTitleEditing) {
             TitleEditSheet(
                 title: viewModel.chat.title,
                 onCommit: { newTitle in
@@ -52,6 +62,11 @@ struct ChatDetailView: View {
                 }
             )
             .presentationDetents([.height(160)])
+        }
+        .fullScreenCover(item: $vm.selectedImageForViewer) { item in
+            ImageViewerView(item: item) {
+                viewModel.dismissImageViewer()
+            }
         }
         .task {
             await viewModel.loadMessages()

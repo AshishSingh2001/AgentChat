@@ -3,6 +3,13 @@ import SwiftUI
 struct MessageBubbleView: View {
     let message: Message
     let fileStorageService: FileStorageService
+    let onImageTap: ((FileAttachment) -> Void)?
+
+    init(message: Message, fileStorageService: FileStorageService, onImageTap: ((FileAttachment) -> Void)? = nil) {
+        self.message = message
+        self.fileStorageService = fileStorageService
+        self.onImageTap = onImageTap
+    }
 
     var isUser: Bool { message.sender == .user }
 
@@ -12,8 +19,10 @@ struct MessageBubbleView: View {
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 if message.type == .file, let file = message.file {
-                    ImageMessageView(file: file, fileStorageService: fileStorageService)
-                        .frame(maxWidth: 240)
+                    ImageMessageView(file: file, fileStorageService: fileStorageService) {
+                        onImageTap?(file)
+                    }
+                    .frame(maxWidth: 240)
                 } else {
                     Text(message.text)
                         .padding(.horizontal, 12)

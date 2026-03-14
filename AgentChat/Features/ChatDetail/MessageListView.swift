@@ -9,8 +9,12 @@ struct MessageListView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.messages) { message in
-                        MessageBubbleView(message: message, fileStorageService: fileStorageService)
-                            .id(message.id)
+                        MessageBubbleView(
+                            message: message,
+                            fileStorageService: fileStorageService,
+                            onImageTap: { file in viewModel.openImageViewer(for: file) }
+                        )
+                        .id(message.id)
                     }
                 }
                 .padding(.vertical, 8)

@@ -4,6 +4,7 @@ import SDWebImageSwiftUI
 struct ImageMessageView: View {
     let file: FileAttachment
     let fileStorageService: FileStorageService
+    let onTap: () -> Void
 
     private var imageURL: URL? {
         if file.path.hasPrefix("http") {
@@ -30,6 +31,7 @@ struct ImageMessageView: View {
             .onFailure { _ in }
             .indicator(.activity)
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .onTapGesture { onTap() }
 
             if file.fileSize > 0 {
                 Text(file.formattedFileSize)

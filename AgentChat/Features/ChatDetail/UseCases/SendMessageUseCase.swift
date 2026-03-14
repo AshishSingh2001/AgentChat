@@ -29,14 +29,19 @@ struct SendMessageUseCase {
         )
         try await messageRepository.insert(message)
 
-        var updatedChat = chat
-        updatedChat.lastMessage = (file != nil && trimmed.isEmpty) ? "📎 Attachment" : trimmed
-        updatedChat.lastMessageTimestamp = now
-        updatedChat.updatedAt = now
+        let newTitle = (existingMessageCount == 0 && !trimmed.isEmpty)
+            ? String(trimmed.prefix(30))
+            : chat.title
+        let newLastMessage = (file != nil && trimmed.isEmpty) ? "Attachment" : trimmed
 
-        if existingMessageCount == 0 && !trimmed.isEmpty {
-            updatedChat.title = String(trimmed.prefix(30))
-        }
+        let updatedChat = Chat(
+            id: chat.id,
+            title: newTitle,
+            lastMessage: newLastMessage,
+            lastMessageTimestamp: now,
+            createdAt: chat.createdAt,
+            updatedAt: now
+        )
 
         try await chatRepository.update(updatedChat)
         return (message, updatedChat)

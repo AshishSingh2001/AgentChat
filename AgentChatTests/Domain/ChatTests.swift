@@ -23,12 +23,18 @@ struct ChatTests {
         #expect(chat.updatedAt == 1_703_520_480_000)
     }
 
-    // MARK: - Equality (ID-based)
+    // MARK: - Equality (all fields)
 
-    @Test func chatsWithSameIDAreEqual() {
+    @Test func chatsWithIdenticalFieldsAreEqual() {
+        let chat1 = Chat(id: "abc", title: "A", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        let chat2 = Chat(id: "abc", title: "A", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        #expect(chat1 == chat2)
+    }
+
+    @Test func chatsWithSameIDButDifferentFieldsAreNotEqual() {
         let chat1 = Chat(id: "abc", title: "A", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         let chat2 = Chat(id: "abc", title: "B", lastMessage: "Different", lastMessageTimestamp: 999, createdAt: 0, updatedAt: 0)
-        #expect(chat1 == chat2)
+        #expect(chat1 != chat2)
     }
 
     @Test func chatsWithDifferentIDsAreNotEqual() {
@@ -37,15 +43,12 @@ struct ChatTests {
         #expect(chat1 != chat2)
     }
 
-    // MARK: - Hashability (ID-based)
+    // MARK: - Hashability (ID-based for Set/Dictionary keying)
 
-    @Test func chatsWithSameIDHashToSameSetSlot() {
+    @Test func chatsWithSameIDHashToSameValue() {
         let chat1 = Chat(id: "abc", title: "A", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         let chat2 = Chat(id: "abc", title: "B", lastMessage: "X", lastMessageTimestamp: 999, createdAt: 0, updatedAt: 0)
-        var set = Set<Chat>()
-        set.insert(chat1)
-        set.insert(chat2)
-        #expect(set.count == 1)
+        #expect(chat1.hashValue == chat2.hashValue)
     }
 
     // MARK: - Timestamp precision

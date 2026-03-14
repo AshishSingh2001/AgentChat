@@ -9,6 +9,10 @@ final class MockChatRepository: ChatRepositoryProtocol, @unchecked Sendable {
 
     func fetchAll() async throws -> [Chat] { chats }
 
+    func fetch(id: String) async throws -> Chat? {
+        chats.first(where: { $0.id == id })
+    }
+
     func create(_ chat: Chat) async throws {
         createCalled = true
         chats.append(chat)

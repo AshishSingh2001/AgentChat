@@ -20,10 +20,7 @@ struct SimulateAgentReplyUseCase {
     ]
 
     func decide(userMessageCount: Int, using rng: inout some RandomNumberGenerator) -> AgentReplyDecision {
-        let divisor = Int.random(in: 4...5, using: &rng)
-        let shouldReply = userMessageCount > 0 && userMessageCount % divisor == 0
-
-        guard shouldReply else {
+        guard userMessageCount > 0 else {
             return AgentReplyDecision(shouldReply: false, replyType: .text(""))
         }
 

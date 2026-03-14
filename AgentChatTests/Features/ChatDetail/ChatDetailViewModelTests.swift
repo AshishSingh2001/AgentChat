@@ -5,20 +5,15 @@ import Foundation
 @MainActor
 struct ChatDetailViewModelTests {
 
-    private func makeChat() -> Chat {
-        Chat(id: "c1", title: "New Chat", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
-    }
-
     private func makeVM(
         agentReplyDecider: ((Int) -> AgentReplyDecision)? = nil
     ) -> (ChatDetailViewModel, MockChatRepository, MockMessageRepository) {
         let chatRepo = MockChatRepository()
         let msgRepo = MockMessageRepository()
         let router = MockAppRouter()
-        let chat = makeChat()
-        chatRepo.chats = [chat]
+        chatRepo.chats = [Chat(id: "c1", title: "New Chat", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)]
         let vm = ChatDetailViewModel(
-            chat: chat,
+            chatId: "c1",
             chatRepository: chatRepo,
             messageRepository: msgRepo,
             router: router,

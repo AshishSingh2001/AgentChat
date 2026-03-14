@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 @Observable
 @MainActor
@@ -12,13 +13,11 @@ final class ChatDetailViewModel {
     var isNearBottom = true
     var draftText: String = "" {
         didSet {
-            if draftText.isEmpty {
-                UserDefaults.standard.removeObject(forKey: draftKey)
-            } else {
-                UserDefaults.standard.set(draftText, forKey: draftKey)
-            }
+            saveDraftText()
         }
     }
+    var selectedImageForViewer: ImageViewerItem?
+    var pendingAttachment: PendingAttachment?
 
     // MARK: - Dependencies
     private let chatRepository: any ChatRepositoryProtocol
@@ -27,27 +26,36 @@ final class ChatDetailViewModel {
     private let sendMessageUseCase: SendMessageUseCase
     private let agentReplyDecider: (Int) -> AgentReplyDecision
     let agentReplyDelayRange: ClosedRange<Double>
+    let fileStorageService: FileStorageService
 
     // MARK: - Internal State
+    private let chatId: String
     private var userMessageCount = 0
     private var pendingReplyTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
 
-    private var draftKey: String { "agentchat.draft.\(chat.id)" }
+    var displayTitle: String {
+        chat.title.isEmpty ? "New Chat" : chat.title
+    }
+
+    private var draftKey: String { "agentchat.draft.\(chatId)" }
 
     // MARK: - Init
     init(
-        chat: Chat,
+        chatId: String,
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
+        fileStorageService: FileStorageService = FileStorageService(),
         agentReplyDelayRange: ClosedRange<Double> = 1.0...2.0,
         agentReplyDecider: ((Int) -> AgentReplyDecision)? = nil
     ) {
-        self.chat = chat
+        self.chatId = chatId
+        self.chat = Chat(id: chatId, title: "", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         self.chatRepository = chatRepository
         self.messageRepository = messageRepository
         self.router = router
+        self.fileStorageService = fileStorageService
         self.agentReplyDelayRange = agentReplyDelayRange
         self.sendMessageUseCase = SendMessageUseCase(
             chatRepository: chatRepository,
@@ -60,12 +68,30 @@ final class ChatDetailViewModel {
             useCase.decide(userMessageCount: count, using: &rng)
         }
 
-        self.draftText = UserDefaults.standard.string(forKey: "agentchat.draft.\(chat.id)") ?? ""
+        loadDraftText()
     }
 
     // MARK: - Message Loading
     func loadMessages() async {
-        messages = (try? await messageRepository.fetchMessages(for: chat.id)) ?? []
+        async let chatTask = chatRepository.fetch(id: chatId)
+        async let messagesTask = messageRepository.fetchMessages(for: chatId)
+        
+        if let loadedChat = try? await chatTask {
+            chat = loadedChat
+        }
+        messages = (try? await messagesTask) ?? []
+    }
+
+    func loadDraftText() {
+        draftText = UserDefaults.standard.string(forKey: draftKey) ?? ""
+    }
+
+    private func saveDraftText() {
+        if draftText.isEmpty {
+            UserDefaults.standard.removeObject(forKey: draftKey)
+        } else {
+            UserDefaults.standard.set(draftText, forKey: draftKey)
+        }
     }
 
     // MARK: - Sending
@@ -128,6 +154,23 @@ final class ChatDetailViewModel {
 
             try? await messageRepository.insert(agentMessage)
             messages.append(agentMessage)
+
+            let agentPreview: String
+            switch decision.replyType {
+            case .text(let content): agentPreview = content
+            case .image: agentPreview = "Sent an image"
+            }
+            let updatedChat = Chat(
+                id: chat.id,
+                title: chat.title,
+                lastMessage: agentPreview,
+                lastMessageTimestamp: now,
+                createdAt: chat.createdAt,
+                updatedAt: now
+            )
+            try? await chatRepository.update(updatedChat)
+            chat = updatedChat
+
             handleNewMessage()
         }
     }
@@ -171,7 +214,65 @@ final class ChatDetailViewModel {
         let trimmed = newTitle.trimmingCharacters(in: .whitespaces)
         isTitleEditing = false
         guard !trimmed.isEmpty else { return }
-        chat.title = trimmed
+        chat = Chat(
+            id: chat.id,
+            title: trimmed,
+            lastMessage: chat.lastMessage,
+            lastMessageTimestamp: chat.lastMessageTimestamp,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt
+        )
         try? await chatRepository.update(chat)
     }
+
+    // MARK: - Image Viewer
+    func openImageViewer(for file: FileAttachment) {
+        let url: URL?
+        if file.path.hasPrefix("http") {
+            url = URL(string: file.path)
+        } else {
+            url = fileStorageService.absoluteURL(for: file.path)
+        }
+        guard let resolvedURL = url else { return }
+        selectedImageForViewer = ImageViewerItem(url: resolvedURL)
+    }
+
+    func dismissImageViewer() {
+        selectedImageForViewer = nil
+    }
+
+    // MARK: - Pending Attachment
+    func setPendingAttachment(_ attachment: PendingAttachment) {
+        pendingAttachment = attachment
+    }
+
+    func clearPendingAttachment() {
+        pendingAttachment = nil
+    }
+
+    func sendWithAttachment() async {
+        guard let attachment = pendingAttachment else { return }
+        pendingAttachment = nil
+
+        let filename = UUID().uuidString + ".jpg"
+        guard let savedPath = try? fileStorageService.save(data: attachment.data, filename: filename) else { return }
+
+        let thumbnailData = try? fileStorageService.generateThumbnail(from: attachment.data, maxWidth: 150)
+        var thumbnailPath: String? = nil
+        if let thumbData = thumbnailData {
+            thumbnailPath = try? fileStorageService.save(data: thumbData, filename: "thumb_" + filename)
+        }
+
+        let fileAttachment = FileAttachment(
+            path: savedPath,
+            fileSize: Int64(attachment.data.count),
+            thumbnailPath: thumbnailPath
+        )
+        await sendMessage(text: draftText, file: fileAttachment)
+    }
+}
+
+struct PendingAttachment {
+    let data: Data
+    let previewImage: UIImage
 }

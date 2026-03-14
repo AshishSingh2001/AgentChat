@@ -19,39 +19,23 @@ private struct FixedRNG: RandomNumberGenerator {
 struct SimulateAgentReplyUseCaseTests {
     let useCase = SimulateAgentReplyUseCase()
 
-    // count=4, divisor=4 (0 → lower bound → 4): 4 % 4 == 0 → shouldReply
-    @Test func count4Divisor4Replies() {
+    // Any positive count always triggers a reply
+    @Test func positiveCountAlwaysReplies() {
         var rng = FixedRNG(0)
-        let decision = useCase.decide(userMessageCount: 4, using: &rng)
+        let decision = useCase.decide(userMessageCount: 1, using: &rng)
         #expect(decision.shouldReply == true)
     }
 
-    // count=4, divisor=5 (UInt64.max → upper bound → 5): 4 % 5 != 0 → no reply
-    @Test func count4Divisor5NoReply() {
-        var rng = FixedRNG(UInt64.max)
-        let decision = useCase.decide(userMessageCount: 4, using: &rng)
+    @Test func zeroCountDoesNotReply() {
+        var rng = FixedRNG(0)
+        let decision = useCase.decide(userMessageCount: 0, using: &rng)
         #expect(decision.shouldReply == false)
     }
 
-    // count=5, divisor=5: 5 % 5 == 0 → shouldReply
-    @Test func count5Divisor5Replies() {
-        var rng = FixedRNG(UInt64.max)
-        let decision = useCase.decide(userMessageCount: 5, using: &rng)
-        #expect(decision.shouldReply == true)
-    }
-
-    // count=6, divisor=5: 6 % 5 != 0 → no reply
-    @Test func count6Divisor5NoReply() {
-        var rng = FixedRNG(UInt64.max)
-        let decision = useCase.decide(userMessageCount: 6, using: &rng)
-        #expect(decision.shouldReply == false)
-    }
-
-    // shouldReply + text: 0→divisor=4 (4%4=0), UInt64.max→Bool.random=false (text), 0→index=0
-    // Note: Bool.random(using:) with next()=0 → true, next()=UInt64.max → false
+    // Bool.random(using:) with next()=UInt64.max → false (text), next()=0 → index=0
     @Test func repliesWithTextWhenRNGFavorsText() {
-        var rng = FixedRNG(0, UInt64.max, 0)
-        let decision = useCase.decide(userMessageCount: 4, using: &rng)
+        var rng = FixedRNG(UInt64.max, 0)
+        let decision = useCase.decide(userMessageCount: 1, using: &rng)
         #expect(decision.shouldReply == true)
         if case .text(let content) = decision.replyType {
             #expect(!content.isEmpty)
@@ -61,21 +45,15 @@ struct SimulateAgentReplyUseCaseTests {
         }
     }
 
-    // shouldReply + image: 0→divisor=4 (4%4=0), 0→Bool.random=true (image)
+    // Bool.random(using:) with next()=0 → true (image)
     @Test func repliesWithImageWhenRNGFavorsImage() {
-        var rng = FixedRNG(0, 0)
-        let decision = useCase.decide(userMessageCount: 4, using: &rng)
+        var rng = FixedRNG(0)
+        let decision = useCase.decide(userMessageCount: 1, using: &rng)
         #expect(decision.shouldReply == true)
         if case .image(let url) = decision.replyType {
             #expect(url == "https://picsum.photos/400/300")
         } else {
             Issue.record("Expected image reply")
         }
-    }
-
-    @Test func zeroCountDoesNotReply() {
-        var rng = FixedRNG(0)
-        let decision = useCase.decide(userMessageCount: 0, using: &rng)
-        #expect(decision.shouldReply == false)
     }
 }

@@ -34,7 +34,7 @@ struct ChatListView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    viewModel.requestDeleteChat(chat)
+                                    Task { await viewModel.deleteChat(chat) }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -54,23 +54,11 @@ struct ChatListView: View {
                 }
             }
         }
-        .task(id: router.path.count) {
+        .task {
             await viewModel.loadChats()
         }
-        .confirmationDialog(
-            "Delete \"\(viewModel.chatPendingDeletion?.title ?? "")\"?",
-            isPresented: Binding(
-                get: { viewModel.chatPendingDeletion != nil },
-                set: { if !$0 { viewModel.cancelDeleteChat() } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                Task { await viewModel.confirmDeleteChat() }
-            }
-            Button("Cancel", role: .cancel) {
-                viewModel.cancelDeleteChat()
-            }
+        .onChange(of: router.path.count) {
+            Task { await viewModel.loadChats() }
         }
     }
 }

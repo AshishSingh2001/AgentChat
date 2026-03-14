@@ -35,7 +35,7 @@ struct FileAttachment: Hashable, Sendable {
 struct Message: Identifiable, Hashable, Sendable {
     let id: String
     let chatId: String
-    var text: String
+    let text: String
     let type: MessageType
     let file: FileAttachment?
     let sender: Sender
