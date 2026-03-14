@@ -409,6 +409,8 @@
 				DEVELOPMENT_TEAM = 7KZ4JC9NHZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "AgentChat needs camera access to send photos in your conversations.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AgentChat needs photo library access to send images in your conversations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -441,6 +443,8 @@
 				DEVELOPMENT_TEAM = 7KZ4JC9NHZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "AgentChat needs camera access to send photos in your conversations.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AgentChat needs photo library access to send images in your conversations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
