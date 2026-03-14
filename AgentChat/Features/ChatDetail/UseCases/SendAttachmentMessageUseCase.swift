@@ -1,7 +1,7 @@
 import Foundation
 
 struct SendAttachmentMessageUseCase {
-    let fileStorageService: FileStorageService
+    let fileStorageService: any FileStorageServiceProtocol
     let sendMessageUseCase: SendMessageUseCase
 
     func execute(

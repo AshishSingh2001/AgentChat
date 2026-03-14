@@ -10,12 +10,13 @@ actor AgentService: AgentServiceProtocol {
     init(
         messageRepository: any MessageRepositoryProtocol,
         chatRepository: any ChatRepositoryProtocol,
-        delayRange: ClosedRange<Double> = 1.0...2.0
+        delayRange: ClosedRange<Double> = 1.0...2.0,
+        decider: SimulateAgentReplyUseCase = SimulateAgentReplyUseCase()
     ) {
         self.messageRepository = messageRepository
         self.chatRepository = chatRepository
         self.delayRange = delayRange
-        self.decider = SimulateAgentReplyUseCase()
+        self.decider = decider
     }
 
     func handleUserMessage(userMessageCount: Int, chat: Chat) async {

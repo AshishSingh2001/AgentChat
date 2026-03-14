@@ -3,7 +3,7 @@ import SDWebImageSwiftUI
 
 struct ImageMessageView: View {
     let file: FileAttachment
-    let fileStorageService: FileStorageService
+    let fileStorageService: any FileStorageServiceProtocol
     let onTap: () -> Void
 
     private var imageURL: URL? {

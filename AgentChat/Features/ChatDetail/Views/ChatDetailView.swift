@@ -8,7 +8,7 @@ struct ChatDetailView: View {
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
-        fileStorageService: FileStorageService,
+        fileStorageService: any FileStorageServiceProtocol,
         agentService: any AgentServiceProtocol
     ) {
         _viewModel = State(initialValue: ChatDetailViewModel(

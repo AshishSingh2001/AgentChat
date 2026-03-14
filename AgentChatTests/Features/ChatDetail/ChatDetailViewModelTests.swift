@@ -25,6 +25,12 @@ struct ChatDetailViewModelTests {
         return (vm, chatRepo, msgRepo, agent)
     }
 
+    // Yield the main actor enough times for the stream Task to process one emission.
+    // All tests that depend on stream delivery call this instead of Task.sleep.
+    private func drainStream() async {
+        for _ in 0..<10 { await Task.yield() }
+    }
+
     @Test func messagesEmptyOnInit() {
         let (vm, _, _, _) = makeVM()
         #expect(vm.messages.isEmpty)
@@ -36,7 +42,7 @@ struct ChatDetailViewModelTests {
             Message(id: "m1", chatId: "c1", text: "Hi", type: .text, file: nil, sender: .user, timestamp: 0)
         ]
         await vm.loadMessages()
-        try await Task.sleep(for: .milliseconds(50))
+        await drainStream()
         #expect(vm.messages.count == 1)
     }
 
@@ -45,7 +51,7 @@ struct ChatDetailViewModelTests {
         await vm.loadMessages()
         await vm.sendMessage(text: "")
         await vm.sendMessage(text: "   ")
-        try await Task.sleep(for: .milliseconds(50))
+        await drainStream()
         #expect(vm.messages.isEmpty)
     }
 
@@ -54,8 +60,8 @@ struct ChatDetailViewModelTests {
         let (vm, _, _, _) = makeVM()
         await vm.loadMessages()
         await vm.sendMessage(text: "Hello")
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(vm.messages.count == 1)
+        await drainStream()
+        try #require(vm.messages.count == 1)
         #expect(vm.messages[0].text == "Hello")
         #expect(vm.messages[0].sender == .user)
     }
@@ -81,7 +87,7 @@ struct ChatDetailViewModelTests {
         let (vm, _, _, _) = makeVM()
         await vm.loadMessages()
         await vm.sendMessage(text: "First message")
-        try await Task.sleep(for: .milliseconds(50))
+        await drainStream()
         await vm.sendMessage(text: "Second message")
         #expect(vm.chat.title == "First message")
     }
@@ -90,7 +96,7 @@ struct ChatDetailViewModelTests {
         let (vm, _, _, agent) = makeVM()
         await vm.loadMessages()
         await vm.sendMessage(text: "Hello")
-        try await Task.sleep(for: .milliseconds(50))
+        await drainStream()
         #expect(agent.handleUserMessageCalled == true)
         #expect(agent.lastUserMessageCount == 1)
     }
@@ -112,7 +118,7 @@ struct ChatDetailViewModelTests {
         await vm.sendMessage(text: "Hello")
         try await Task.sleep(for: .milliseconds(200))
         let agentMessages = vm.messages.filter { $0.sender == .agent }
-        #expect(agentMessages.count == 1)
+        try #require(agentMessages.count == 1)
         #expect(agentMessages[0].text == "I can help!")
     }
 
@@ -156,7 +162,7 @@ struct ChatDetailViewModelTests {
         vm.isNearBottom = true
         vm.shouldScrollToBottom = false
         try? await msgRepo.insert(Message(id: "m1", chatId: "c1", text: "Hi", type: .text, file: nil, sender: .user, timestamp: 0))
-        try await Task.sleep(for: .milliseconds(50))
+        await drainStream()
         #expect(vm.shouldScrollToBottom == true)
     }
 
@@ -165,7 +171,7 @@ struct ChatDetailViewModelTests {
         await vm.loadMessages()
         vm.isNearBottom = false
         try? await msgRepo.insert(Message(id: "m1", chatId: "c1", text: "Hi", type: .text, file: nil, sender: .user, timestamp: 0))
-        try await Task.sleep(for: .milliseconds(50))
+        await drainStream()
         #expect(vm.showNewMessageToast == true)
     }
 
@@ -236,6 +242,52 @@ struct ChatDetailViewModelTests {
         #expect(UserDefaults.standard.string(forKey: key) == "debounced")
     }
 
+    @Test func setPendingAttachmentStoresAttachment() {
+        let (vm, _, _, _) = makeVM()
+        let data = Data([0x01])
+        let image = UIImage(systemName: "photo")!
+        vm.setPendingAttachment(PendingAttachment(data: data, previewImage: image))
+        #expect(vm.pendingAttachment != nil)
+    }
+
+    @Test func clearPendingAttachmentRemovesAttachment() {
+        let (vm, _, _, _) = makeVM()
+        vm.setPendingAttachment(PendingAttachment(data: Data(), previewImage: UIImage(systemName: "photo")!))
+        vm.clearPendingAttachment()
+        #expect(vm.pendingAttachment == nil)
+    }
+
+    @Test func openImageViewerSetsSelectedItemForRemoteURL() {
+        let (vm, _, _, _) = makeVM()
+        let file = FileAttachment(path: "https://picsum.photos/400/300", fileSize: 0, thumbnailPath: nil)
+        vm.openImageViewer(for: file)
+        #expect(vm.selectedImageForViewer != nil)
+        #expect(vm.selectedImageForViewer?.url.absoluteString == "https://picsum.photos/400/300")
+    }
+
+    @Test func openImageViewerSetsSelectedItemForLocalPath() {
+        let (vm, _, _, _) = makeVM()
+        let file = FileAttachment(path: "some-image.jpg", fileSize: 0, thumbnailPath: nil)
+        vm.openImageViewer(for: file)
+        #expect(vm.selectedImageForViewer != nil)
+        #expect(vm.selectedImageForViewer?.url.lastPathComponent == "some-image.jpg")
+    }
+
+    @Test func openImageViewerIgnoresInvalidURL() {
+        let (vm, _, _, _) = makeVM()
+        let file = FileAttachment(path: "http://[invalid", fileSize: 0, thumbnailPath: nil)
+        vm.openImageViewer(for: file)
+        #expect(vm.selectedImageForViewer == nil)
+    }
+
+    @Test func dismissImageViewerClearsSelection() {
+        let (vm, _, _, _) = makeVM()
+        let file = FileAttachment(path: "https://picsum.photos/400/300", fileSize: 0, thumbnailPath: nil)
+        vm.openImageViewer(for: file)
+        vm.dismissImageViewer()
+        #expect(vm.selectedImageForViewer == nil)
+    }
+
     @Test func sendWithAttachmentAppendsFileMessage() async throws {
         let (vm, _, _, _) = makeVM()
         await vm.loadMessages()
@@ -243,8 +295,8 @@ struct ChatDetailViewModelTests {
         let image = UIImage(systemName: "photo")!
         vm.setPendingAttachment(PendingAttachment(data: imageData, previewImage: image))
         await vm.sendWithAttachment()
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(vm.messages.count == 1)
+        await drainStream()
+        try #require(vm.messages.count == 1)
         #expect(vm.messages[0].type == .file)
         #expect(vm.messages[0].sender == .user)
         #expect(vm.pendingAttachment == nil)

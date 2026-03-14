@@ -34,7 +34,7 @@ final class ChatDetailViewModel {
     private let sendMessageUseCase: SendMessageUseCase
     private let sendAttachmentMessageUseCase: SendAttachmentMessageUseCase
     private let agentService: any AgentServiceProtocol
-    let fileStorageService: FileStorageService
+    let fileStorageService: any FileStorageServiceProtocol
 
     // MARK: - Internal State
     private let chatId: String
@@ -56,7 +56,7 @@ final class ChatDetailViewModel {
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
-        fileStorageService: FileStorageService,
+        fileStorageService: any FileStorageServiceProtocol,
         agentService: any AgentServiceProtocol
     ) {
         self.chatId = chatId

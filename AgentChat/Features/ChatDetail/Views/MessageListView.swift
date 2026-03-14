@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MessageListView: View {
     @Bindable var viewModel: ChatDetailViewModel
-    let fileStorageService: FileStorageService
+    let fileStorageService: any FileStorageServiceProtocol
 
     var body: some View {
         ScrollViewReader { proxy in

@@ -2,10 +2,10 @@ import SwiftUI
 
 struct MessageBubbleView: View {
     let message: Message
-    let fileStorageService: FileStorageService
+    let fileStorageService: any FileStorageServiceProtocol
     let onImageTap: ((FileAttachment) -> Void)?
 
-    init(message: Message, fileStorageService: FileStorageService, onImageTap: ((FileAttachment) -> Void)? = nil) {
+    init(message: Message, fileStorageService: any FileStorageServiceProtocol, onImageTap: ((FileAttachment) -> Void)? = nil) {
         self.message = message
         self.fileStorageService = fileStorageService
         self.onImageTap = onImageTap
