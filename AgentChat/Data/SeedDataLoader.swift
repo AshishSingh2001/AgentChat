@@ -13,6 +13,17 @@ final actor SeedDataLoader {
         UserDefaults.standard.set(true, forKey: Self.seedKey)
     }
 
+    func resetAndReload() async throws {
+        let allMessages = try modelContext.fetch(FetchDescriptor<MessageEntity>())
+        for msg in allMessages { modelContext.delete(msg) }
+        let allChats = try modelContext.fetch(FetchDescriptor<ChatEntity>())
+        for chat in allChats { modelContext.delete(chat) }
+        try modelContext.save()
+        try await insertSeedData()
+        hasLoaded = true
+        UserDefaults.standard.set(true, forKey: Self.seedKey)
+    }
+
     private func insertSeedData() async throws {
         // Chat 1 - Mumbai Flight Booking
         let chat1 = ChatEntity(

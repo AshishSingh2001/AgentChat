@@ -28,6 +28,7 @@ struct ChatListView: View {
                 List {
                     ForEach(viewModel.chats) { chat in
                         ChatRowView(chat: chat)
+                            .accessibilityIdentifier("chatRow_\(chat.id)")
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 router.push(.chatDetail(chatId: chat.id))
@@ -52,12 +53,16 @@ struct ChatListView: View {
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
+                .accessibilityIdentifier("newChatButton")
             }
         }
         .task {
             await viewModel.loadChats()
         }
         .onChange(of: router.path.count) {
+            Task { await viewModel.loadChats() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .seedDataLoaded)) { _ in
             Task { await viewModel.loadChats() }
         }
     }

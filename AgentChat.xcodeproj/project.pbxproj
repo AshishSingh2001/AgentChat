@@ -31,6 +31,7 @@
 		75F9780B2F63AD1700268D08 /* AgentChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		75F9781A2F63AD1800268D08 /* AgentChatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AgentChatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		75F978242F63AD1800268D08 /* AgentChatUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AgentChatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		75FEF5542F65115E00BA0347 /* AgentChat.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = AgentChat.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,6 +81,7 @@
 		75F978022F63AD1700268D08 = {
 			isa = PBXGroup;
 			children = (
+				75FEF5542F65115E00BA0347 /* AgentChat.xctestplan */,
 				75F9780D2F63AD1700268D08 /* AgentChat */,
 				75F9781D2F63AD1800268D08 /* AgentChatTests */,
 				75F978272F63AD1800268D08 /* AgentChatUITests */,

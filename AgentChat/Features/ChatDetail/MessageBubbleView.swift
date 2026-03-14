@@ -40,5 +40,6 @@ struct MessageBubbleView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
+        .accessibilityIdentifier("message_\(message.id)")
     }
 }

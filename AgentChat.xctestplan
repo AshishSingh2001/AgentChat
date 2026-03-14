@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "94BCAABD-9839-4C21-B7EA-8E11238FE671",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:AgentChat.xcodeproj",
+      "identifier" : "75F9780A2F63AD1700268D08",
+      "name" : "AgentChat"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:AgentChat.xcodeproj",
+        "identifier" : "75F978192F63AD1800268D08",
+        "name" : "AgentChatTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:AgentChat.xcodeproj",
+        "identifier" : "75F978232F63AD1800268D08",
+        "name" : "AgentChatUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

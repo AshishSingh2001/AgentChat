@@ -59,6 +59,7 @@ struct InputBarView: View {
                         .frame(minHeight: minHeight, maxHeight: maxHeight)
                         .fixedSize(horizontal: false, vertical: true)
                         .scrollContentBackground(.hidden)
+                        .accessibilityIdentifier("messageInput")
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -72,6 +73,7 @@ struct InputBarView: View {
                         .foregroundStyle(isSendDisabled ? Color(.systemGray4) : .blue)
                 }
                 .disabled(isSendDisabled)
+                .accessibilityIdentifier("sendButton")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
