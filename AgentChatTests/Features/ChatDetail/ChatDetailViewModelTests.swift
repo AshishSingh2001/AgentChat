@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UIKit
 @testable import AgentChat
 
 @MainActor
@@ -17,6 +18,7 @@ struct ChatDetailViewModelTests {
             chatRepository: chatRepo,
             messageRepository: msgRepo,
             router: router,
+            fileStorageService: FileStorageService(),
             agentReplyDelayRange: 0.05...0.05,
             agentReplyDecider: agentReplyDecider
         )
@@ -56,6 +58,7 @@ struct ChatDetailViewModelTests {
         let (vm, _, _) = makeVM()
         vm.draftText = "work in progress"
         await vm.sendMessage(text: "Hello")
+        vm.saveDraftImmediately()
         #expect(vm.draftText == "")
         #expect(UserDefaults.standard.string(forKey: "agentchat.draft.c1") == nil)
     }
@@ -160,5 +163,54 @@ struct ChatDetailViewModelTests {
         #expect(vm.isNearBottom == true)
         vm.updateScrollOffset(200)
         #expect(vm.isNearBottom == false)
+    }
+
+    @Test func saveDraftImmediatelyWritesToUserDefaults() {
+        let (vm, _, _) = makeVM()
+        vm.draftText = "immediate save"
+        // Debounce would delay the save — saveDraftImmediately flushes it now
+        vm.saveDraftImmediately()
+        #expect(UserDefaults.standard.string(forKey: "agentchat.draft.c1") == "immediate save")
+        UserDefaults.standard.removeObject(forKey: "agentchat.draft.c1")
+    }
+
+    @Test func draftDebounceEventuallySavesToUserDefaults() async throws {
+        // Use a unique chatId to avoid cross-test UserDefaults pollution
+        let chatRepo = MockChatRepository()
+        let msgRepo = MockMessageRepository()
+        let router = MockAppRouter()
+        let uniqueId = "debounce-test-\(UUID().uuidString)"
+        chatRepo.chats = [Chat(id: uniqueId, title: "New Chat", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)]
+        let vm = ChatDetailViewModel(
+            chatId: uniqueId,
+            chatRepository: chatRepo,
+            messageRepository: msgRepo,
+            router: router,
+            fileStorageService: FileStorageService(),
+            agentReplyDelayRange: 0.05...0.05
+        )
+        let key = "agentchat.draft.\(uniqueId)"
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        vm.draftText = "debounced"
+        // After 500ms, debounce (300ms) has fired
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(UserDefaults.standard.string(forKey: key) == "debounced")
+    }
+
+    @Test func sendWithAttachmentAppendsFileMessage() async throws {
+        let neverReply: (Int) -> AgentReplyDecision = { _ in
+            AgentReplyDecision(shouldReply: false, replyType: .text(""))
+        }
+        let (vm, _, _) = makeVM(agentReplyDecider: neverReply)
+        let imageData = UIImage(systemName: "photo")!.jpegData(compressionQuality: 0.8) ?? Data()
+        let image = UIImage(systemName: "photo")!
+        vm.setPendingAttachment(PendingAttachment(data: imageData, previewImage: image))
+        await vm.sendWithAttachment()
+        #expect(vm.messages.count == 1)
+        #expect(vm.messages[0].type == .file)
+        #expect(vm.messages[0].sender == .user)
+        #expect(vm.pendingAttachment == nil)
     }
 }

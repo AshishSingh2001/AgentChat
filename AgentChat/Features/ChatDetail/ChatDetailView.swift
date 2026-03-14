@@ -68,6 +68,9 @@ struct ChatDetailView: View {
                 viewModel.dismissImageViewer()
             }
         }
+        .onDisappear {
+            viewModel.saveDraftImmediately()
+        }
         .task {
             await viewModel.loadMessages()
         }

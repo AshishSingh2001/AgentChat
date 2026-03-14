@@ -4,6 +4,13 @@ import UIKit
 @Observable
 @MainActor
 final class ChatDetailViewModel {
+    // MARK: - Constants
+    private enum Constants {
+        static let scrollThreshold: CGFloat = 150
+        static let toastDismissDelay: TimeInterval = 3
+        static let draftDebounceDelay: Duration = .milliseconds(300)
+    }
+
     // MARK: - Published State
     var messages: [Message] = []
     var chat: Chat
@@ -13,7 +20,7 @@ final class ChatDetailViewModel {
     var isNearBottom = true
     var draftText: String = "" {
         didSet {
-            saveDraftText()
+            debouncedSaveDraft()
         }
     }
     var selectedImageForViewer: ImageViewerItem?
@@ -24,6 +31,7 @@ final class ChatDetailViewModel {
     private let messageRepository: any MessageRepositoryProtocol
     private let router: any AppRouterProtocol
     private let sendMessageUseCase: SendMessageUseCase
+    private let sendAttachmentMessageUseCase: SendAttachmentMessageUseCase
     private let agentReplyDecider: (Int) -> AgentReplyDecision
     let agentReplyDelayRange: ClosedRange<Double>
     let fileStorageService: FileStorageService
@@ -33,6 +41,7 @@ final class ChatDetailViewModel {
     private var userMessageCount = 0
     private var pendingReplyTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
+    private var draftSaveTask: Task<Void, Never>?
 
     var displayTitle: String {
         chat.title.isEmpty ? "New Chat" : chat.title
@@ -46,7 +55,7 @@ final class ChatDetailViewModel {
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
-        fileStorageService: FileStorageService = FileStorageService(),
+        fileStorageService: FileStorageService,
         agentReplyDelayRange: ClosedRange<Double> = 1.0...2.0,
         agentReplyDecider: ((Int) -> AgentReplyDecision)? = nil
     ) {
@@ -60,6 +69,10 @@ final class ChatDetailViewModel {
         self.sendMessageUseCase = SendMessageUseCase(
             chatRepository: chatRepository,
             messageRepository: messageRepository
+        )
+        self.sendAttachmentMessageUseCase = SendAttachmentMessageUseCase(
+            fileStorageService: fileStorageService,
+            sendMessageUseCase: self.sendMessageUseCase
         )
 
         let useCase = SimulateAgentReplyUseCase()
@@ -92,6 +105,20 @@ final class ChatDetailViewModel {
         } else {
             UserDefaults.standard.set(draftText, forKey: draftKey)
         }
+    }
+
+    private func debouncedSaveDraft() {
+        draftSaveTask?.cancel()
+        draftSaveTask = Task {
+            try? await Task.sleep(for: Constants.draftDebounceDelay)
+            guard !Task.isCancelled else { return }
+            saveDraftText()
+        }
+    }
+
+    func saveDraftImmediately() {
+        draftSaveTask?.cancel()
+        saveDraftText()
     }
 
     // MARK: - Sending
@@ -177,7 +204,7 @@ final class ChatDetailViewModel {
 
     // MARK: - Scroll
     func updateScrollOffset(_ offsetFromBottom: CGFloat) {
-        isNearBottom = offsetFromBottom < 150
+        isNearBottom = offsetFromBottom < Constants.scrollThreshold
     }
 
     private func handleNewMessage() {
@@ -193,7 +220,7 @@ final class ChatDetailViewModel {
     private func scheduleToastDismiss() {
         toastTask?.cancel()
         toastTask = Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(Constants.toastDismissDelay))
             guard !Task.isCancelled else { return }
             showNewMessageToast = false
         }
@@ -254,21 +281,19 @@ final class ChatDetailViewModel {
         guard let attachment = pendingAttachment else { return }
         pendingAttachment = nil
 
-        let filename = UUID().uuidString + ".jpg"
-        guard let savedPath = try? fileStorageService.save(data: attachment.data, filename: filename) else { return }
+        guard let (message, updatedChat) = try? await sendAttachmentMessageUseCase.execute(
+            attachment: attachment,
+            text: draftText.trimmingCharacters(in: .whitespaces),
+            chat: chat,
+            existingMessageCount: messages.count
+        ) else { return }
 
-        let thumbnailData = try? fileStorageService.generateThumbnail(from: attachment.data, maxWidth: 150)
-        var thumbnailPath: String? = nil
-        if let thumbData = thumbnailData {
-            thumbnailPath = try? fileStorageService.save(data: thumbData, filename: "thumb_" + filename)
-        }
-
-        let fileAttachment = FileAttachment(
-            path: savedPath,
-            fileSize: Int64(attachment.data.count),
-            thumbnailPath: thumbnailPath
-        )
-        await sendMessage(text: draftText, file: fileAttachment)
+        chat = updatedChat
+        messages.append(message)
+        userMessageCount += 1
+        draftText = ""
+        handleNewMessage()
+        scheduleAgentReply(for: userMessageCount)
     }
 }
 
