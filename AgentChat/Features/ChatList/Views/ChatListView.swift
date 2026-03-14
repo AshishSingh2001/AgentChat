@@ -60,10 +60,7 @@ struct ChatListView: View {
             }
         }
         .task {
-            await viewModel.loadChats()
-        }
-        .onChange(of: router.path.count) {
-            Task { await viewModel.loadChats() }
+            viewModel.startStream()
         }
     }
 }

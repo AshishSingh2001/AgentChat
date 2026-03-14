@@ -60,12 +60,14 @@ actor AgentService: AgentServiceProtocol {
 
         try? await messageRepository.insert(agentMessage)
 
+        // Fetch fresh to avoid overwriting title/fields changed since the reply was triggered
+        let current = (try? await chatRepository.fetch(id: chat.id)) ?? chat
         let updatedChat = Chat(
-            id: chat.id,
-            title: chat.title,
+            id: current.id,
+            title: current.title,
             lastMessage: agentPreview,
             lastMessageTimestamp: now,
-            createdAt: chat.createdAt,
+            createdAt: current.createdAt,
             updatedAt: now
         )
         try? await chatRepository.update(updatedChat)

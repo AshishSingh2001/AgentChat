@@ -4,4 +4,5 @@ protocol ChatRepositoryProtocol: Sendable {
     func create(_ chat: Chat) async throws
     func update(_ chat: Chat) async throws
     func delete(id: String) async throws
+    func chatStream() -> AsyncStream<[Chat]>
 }

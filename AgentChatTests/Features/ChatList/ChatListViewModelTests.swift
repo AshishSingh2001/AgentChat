@@ -17,20 +17,32 @@ struct ChatListViewModelTests {
         return (vm, chatRepo, msgRepo, router)
     }
 
+    private func drainStream() async {
+        for _ in 0..<10 { await Task.yield() }
+    }
+
     @Test func chatsEmptyOnInit() {
         let (vm, _, _, _) = makeVM()
         #expect(vm.chats.isEmpty)
     }
 
-    @Test func loadChatsPopulatesArray() async throws {
+    @Test func isLoadingTrueBeforeStreamStarts() {
+        let (vm, _, _, _) = makeVM()
+        #expect(vm.isLoading == true)
+    }
+
+    @Test func streamPopulatesChats() async throws {
         let (vm, chatRepo, _, _) = makeVM()
         chatRepo.chats = [Chat(id: "1", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)]
-        await vm.loadChats()
+        vm.startStream()
+        await drainStream()
         #expect(vm.chats.count == 1)
+        #expect(vm.isLoading == false)
     }
 
     @Test func createNewChatNavigatesToDetail() async throws {
         let (vm, _, _, router) = makeVM()
+        vm.startStream()
         await vm.createNewChat()
         #expect(router.pushedRoutes.count == 1)
         if case .chatDetail(let chatId) = router.pushedRoutes[0] {
@@ -40,36 +52,39 @@ struct ChatListViewModelTests {
         }
     }
 
-    @Test func createNewChatAppendsToList() async throws {
+    @Test func createNewChatAppearsViaStream() async throws {
         let (vm, _, _, _) = makeVM()
+        vm.startStream()
         await vm.createNewChat()
+        await drainStream()
         #expect(vm.chats.count == 1)
     }
 
-    @Test func deleteChatRemovesFromListAndRepo() async throws {
+    @Test func deleteChatRemovesViaStream() async throws {
         let (vm, chatRepo, msgRepo, _) = makeVM()
         let chat = Chat(id: "x", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         chatRepo.chats = [chat]
-        await vm.loadChats()
+        vm.startStream()
+        await drainStream()
+        #expect(vm.chats.count == 1)
         await vm.deleteChat(chat)
+        await drainStream()
         #expect(vm.chats.isEmpty)
         #expect(chatRepo.deletedId == "x")
         #expect(msgRepo.deletedChatIds.contains("x"))
     }
 
-    @Test func reloadAfterNavPopReflectsLatestData() async throws {
+    @Test func chatUpdatesReflectedViaStream() async throws {
         let (vm, chatRepo, _, _) = makeVM()
-        await vm.loadChats()
-        #expect(vm.chats.isEmpty)
-        chatRepo.chats = [Chat(id: "1", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)]
-        await vm.loadChats()
-        #expect(vm.chats.count == 1)
-    }
-
-    @Test func isLoadingStartsTrueBecomsesFalseAfterLoad() async throws {
-        let (vm, _, _, _) = makeVM()
-        #expect(vm.isLoading == true)
-        await vm.loadChats()
-        #expect(vm.isLoading == false)
+        let chat = Chat(id: "1", title: "Old", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        chatRepo.chats = [chat]
+        vm.startStream()
+        await drainStream()
+        #expect(vm.chats[0].title == "Old")
+        let updated = Chat(id: "1", title: "New", lastMessage: "Hi", lastMessageTimestamp: 1, createdAt: 0, updatedAt: 1)
+        try? await chatRepo.update(updated)
+        await drainStream()
+        #expect(vm.chats[0].title == "New")
+        #expect(vm.chats[0].lastMessage == "Hi")
     }
 }

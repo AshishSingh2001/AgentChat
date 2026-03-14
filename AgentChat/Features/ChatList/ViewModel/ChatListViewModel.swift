@@ -11,6 +11,7 @@ final class ChatListViewModel {
     private let createChatUseCase: CreateChatUseCase
     private let deleteChatUseCase: DeleteChatUseCase
     private let router: any AppRouterProtocol
+    private var streamTask: Task<Void, Never>?
 
     init(
         chatRepository: any ChatRepositoryProtocol,
@@ -24,20 +25,25 @@ final class ChatListViewModel {
         self.router = router
     }
 
-    func loadChats() async {
-        isLoading = true
-        chats = (try? await chatRepository.fetchAll()) ?? []
-        isLoading = false
+    func startStream() {
+        streamTask?.cancel()
+        streamTask = Task {
+            for await updated in chatRepository.chatStream() {
+                guard !Task.isCancelled else { break }
+                chats = updated
+                isLoading = false
+            }
+        }
     }
 
     func createNewChat() async {
         guard let chat = try? await createChatUseCase.execute() else { return }
-        chats.insert(chat, at: 0)
+        // Stream will update chats[]; navigate immediately since chat is already in DB
         router.push(.chatDetail(chatId: chat.id))
     }
 
     func deleteChat(_ chat: Chat) async {
-        chats.removeAll { $0.id == chat.id }
+        // Stream will remove it reactively after DB delete
         try? await deleteChatUseCase.execute(chatId: chat.id)
     }
 }

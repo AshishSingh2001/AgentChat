@@ -12,13 +12,36 @@ final actor SwiftDataChatRepository: ChatRepositoryProtocol {
         self.initializer = initializer
     }
 
+    func chatStream() -> AsyncStream<[Chat]> {
+        AsyncStream { continuation in
+            let task = Task {
+                await initializer.waitForInit()
+                let initial = (try? self._fetchAll()) ?? []
+                continuation.yield(initial)
+
+                let context = self.modelContext
+                for await notification in NotificationCenter.default.notifications(named: ModelContext.didSave) {
+                    guard !Task.isCancelled else { break }
+                    guard (notification.object as? ModelContext) === context else { continue }
+                    let chats = (try? self._fetchAll()) ?? []
+                    continuation.yield(chats)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     func fetchAll() async throws -> [Chat] {
         await initializer.waitForInit()
+        return try _fetchAll()
+    }
+
+    private func _fetchAll() throws -> [Chat] {
         let descriptor = FetchDescriptor<ChatEntity>(
             sortBy: [SortDescriptor(\.lastMessageTimestamp, order: .reverse)]
         )
-        let entities = try modelContext.fetch(descriptor)
-        return entities.map { $0.toChat() }
+        return try modelContext.fetch(descriptor).map { $0.toChat() }
     }
 
     func fetch(id: String) async throws -> Chat? {

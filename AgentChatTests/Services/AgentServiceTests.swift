@@ -62,6 +62,26 @@ struct AgentServiceTests {
         #expect((chatRepo.updatedChat?.lastMessageTimestamp ?? 0) > 0)
     }
 
+    @Test func usesLatestTitleNotStaleSnapshot() async throws {
+        let msgRepo = MockMessageRepository()
+        let chatRepo = MockChatRepository()
+        let chat = makeChat()
+        chatRepo.chats = [chat]
+
+        // Simulate title being updated in DB after the reply was triggered
+        let renamedChat = Chat(id: "c1", title: "Renamed Title", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        try? await chatRepo.update(renamedChat)
+
+        let service = AgentService(
+            messageRepository: msgRepo,
+            chatRepository: chatRepo,
+            delayRange: 0.0...0.0
+        )
+        // Pass original snapshot (stale title) — service should fetch fresh
+        await service.handleUserMessage(userMessageCount: 1, chat: chat)
+        #expect(chatRepo.updatedChat?.title == "Renamed Title")
+    }
+
     @Test func insertedMessageIsEitherTextOrFile() async throws {
         let msgRepo = MockMessageRepository()
         let chatRepo = MockChatRepository()
