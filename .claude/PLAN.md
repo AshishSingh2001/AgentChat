@@ -160,11 +160,11 @@ Then implement:
 - `Domain/Message.swift` — `struct Message: Identifiable, Hashable, Sendable`, `enum MessageType: String, Sendable`, `enum Sender: String, Sendable`, `struct FileAttachment: Sendable`
 
 #### Step 2.2 — Repository Protocols
-Both protocols are `actor`-compatible — their methods are `async throws` so callers can bridge actor contexts safely.
+Protocols use `Sendable` (not `Actor`) so mock implementations can be plain `final class` in tests. Concrete `@ModelActor` repositories still conform automatically (actors are Sendable). Methods are `async throws` for actor bridging.
 
 - `Domain/ChatRepositoryProtocol.swift`:
   ```swift
-  protocol ChatRepositoryProtocol: Actor {
+  protocol ChatRepositoryProtocol: Sendable {
       func fetchAll() async throws -> [Chat]
       func create(_ chat: Chat) async throws
       func update(_ chat: Chat) async throws
@@ -173,12 +173,13 @@ Both protocols are `actor`-compatible — their methods are `async throws` so ca
   ```
 - `Domain/MessageRepositoryProtocol.swift`:
   ```swift
-  protocol MessageRepositoryProtocol: Actor {
+  protocol MessageRepositoryProtocol: Sendable {
       func fetchMessages(for chatId: String) async throws -> [Message]
       func insert(_ message: Message) async throws
       func deleteAll(for chatId: String) async throws
   }
   ```
+- **Note**: Existing protocol files use `Actor` conformance (written in Phase 2). Update them to `Sendable` at start of Phase 5 before writing mocks.
 
 **Milestone M2 — Domain complete:** All domain model tests pass. Protocols compile. Zero SwiftData/UIKit imports in `Domain/`.
 
@@ -346,11 +347,15 @@ struct AgentReplyDecision {
 func decide(userMessageCount: Int, using rng: inout some RandomNumberGenerator) -> AgentReplyDecision
 ```
 
+Logic: `shouldReply = (userMessageCount % rng.next(4...5)) == 0`. Both the divisor and the count are under test control.
+
 Tests with fixed `RandomNumberGenerator` (deterministic):
-- Counter at 4 with seeded rng → `shouldReply == false`
-- Counter at 5 with seeded rng → `shouldReply == true`, type determined by 70/30 split
-- All 5 predefined text responses appear in rotation
-- Image URL is `https://picsum.photos/400/300`
+- `count=4, rng picks 4` → `shouldReply == true` (4 % 4 == 0)
+- `count=4, rng picks 5` → `shouldReply == false` (4 % 5 != 0)
+- `count=5, rng picks 5` → `shouldReply == true` (5 % 5 == 0)
+- `count=6, rng picks 5` → `shouldReply == false` (6 % 5 != 0)
+- When shouldReply and rng favors text → returns `.text(String)` from 5 predefined responses
+- When shouldReply and rng favors image → returns `.image("https://picsum.photos/400/300")`
 
 No `Task`, no `sleep`, no timer — completely synchronous, trivially testable.
 
@@ -362,7 +367,7 @@ Tests with mock use cases + `MockAppRouter`:
 - `sendMessage("")` is a no-op
 - `sendMessage` increments internal `userMessageCount`
 - After send, schedules agent reply: `Task.sleep(1-2s)` then calls `SimulateAgentReplyUseCase.decide`
-- Rapid sends within 1.5s cancel the previous `Task` (store handle, call `.cancel()` on new send)
+- Rapid sends within 1.5s cancel the previous reply `Task` (store handle, call `.cancel()` on new send); `userMessageCount` keeps incrementing — never reset
 
 **Scroll state:**
 - `isNearBottom` is `true` when `scrollOffsetFromBottom < 150`
@@ -384,7 +389,7 @@ Tests with mock use cases + `MockAppRouter`:
 - `ChatDetailView.swift` — nav bar title tappable (shows `TextField` overlay when `isTitleEditing`)
 - `MessageListView.swift` — `ScrollViewReader` + `LazyVStack`; `GeometryReader` inside scroll to measure offset for threshold; `NewMessageToastView` pill overlay (slide-up animation)
 - `MessageBubbleView.swift` — `.leading`/`.trailing` alignment; user: blue bubble; agent: gray; `TimestampFormatter.timeString(from:)` below bubble
-- `ImageMessageView.swift` — `WebImage` with placeholder spinner + error state; file size label; tap sets `viewModel.selectedImageForViewer` which triggers `.fullScreenCover`
+- `ImageMessageView.swift` — handles both remote and local images: if `file.path` starts with `http` → `WebImage(url:)` (SDWebImage handles network); else → `WebImage(url: fileStorageService.absoluteURL(for: file.path))` (local file URL). Placeholder spinner + broken-image error state in both cases. File size label. Tap opens fullscreen viewer.
 - `InputBarView.swift` — `TextEditor` dynamic height (1–5 lines via `min/maxHeight`); send button disabled when empty; `PhotosPicker` + camera option; `safeAreaInset(edge: .bottom)`
 
 **Milestone M7 — ChatDetail works on device:** Messages send, agent replies after delay, scroll toast appears, images load from URLs.
@@ -395,6 +400,7 @@ Tests with mock use cases + `MockAppRouter`:
 **Goal:** Camera/gallery picking, local storage, fullscreen viewer with zoom.
 
 #### Step 8.1 — Image Picker
+- Add `NSCameraUsageDescription` and `NSPhotoLibraryUsageDescription` to Info.plist before any picker code (app crashes on access without these)
 - `PhotosPicker` (gallery) → on selection, load `Data`, call `FileStorageService.save` + `generateThumbnail`, build `Message` with `type: .file`
 - Camera — `UIImagePickerController` wrapped in `UIViewControllerRepresentable`; same save flow
 - Show pending image preview in `InputBarView` before send (confirm / discard)
@@ -430,7 +436,7 @@ Also: double-tap to reset scale to 1.0. `X` dismiss button top-right.
 **Goal:** All DI is already wired (done in Phase 5). This phase verifies the full flow.
 
 #### Step 9.1 — Seed completeness
-- Chat 1: 10 messages from assignment spec (with 2 image messages)
+- Chat 1: 10 messages from assignment spec (with 2 image messages). Note: msg-007 has a duplicate JSON key in the spec — the correct interpretation is `text: ""` (empty caption) since the spec says message text is optional for file attachments.
 - Chat 2 ("Hotel Reservation Help"): 6 generated messages, alternating user/agent, ending with assignment's `lastMessage`
 - Chat 3 ("Restaurant Recommendations"): 5 generated messages, ending with assignment's `lastMessage`
 - All `lastMessage` and `lastMessageTimestamp` values match the last seeded message in each chat
@@ -477,6 +483,7 @@ Required deliverable. Include:
 - Clean build, no warnings
 - All test suites pass
 - Screen recording: launch → seed chats → chat detail → send message → agent reply → send image → fullscreen image → back → delete chat
+- Note on .ipa: Archive requires a signing identity. README should state that a simulator build is provided; evaluators run via Xcode. If a real device .ipa is needed, add `xcodebuild archive` step with a development team.
 
 **Milestone M10 — Shippable:** No warnings, all tests pass, README written, recording captured.
 
@@ -623,7 +630,7 @@ docs: README with architecture, setup instructions, and assumptions
 | ChatList sync | `.task(id: router.path.count)` re-fetches on nav pop |
 | New chat flow | Tap → create → navigate → first user message auto-titles (≤30 chars) |
 | Scroll UX | 150px threshold → auto-scroll; beyond → "↓ New message" pill toast, 3s auto-dismiss |
-| Agent debounce | ViewModel cancels pending Task + resets counter on rapid send (<1.5s) |
+| Agent debounce | ViewModel cancels pending reply Task on rapid send (<1.5s); `userMessageCount` keeps incrementing, never reset |
 | Agent reply logic | UseCase is pure (injectable RNG); ViewModel owns Task.sleep + cancellation |
 | File storage | `Documents/AgentChat/attachments/` + UUID filename + ~150px thumbnail |
 | Bonus features | Editable title (tap nav bar) + swipe-to-delete + draft saving |
