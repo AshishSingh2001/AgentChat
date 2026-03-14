@@ -11,7 +11,11 @@ struct AgentChatApp: App {
             AppView(
                 chatRepository: persistence.chatRepository,
                 messageRepository: persistence.messageRepository,
-                fileStorageService: fileStorageService
+                fileStorageService: fileStorageService,
+                agentService: AgentService(
+                    messageRepository: persistence.messageRepository,
+                    chatRepository: persistence.chatRepository
+                )
             )
             .environment(router)
             .task {

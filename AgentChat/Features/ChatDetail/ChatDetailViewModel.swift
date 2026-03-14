@@ -33,16 +33,16 @@ final class ChatDetailViewModel {
     private let router: any AppRouterProtocol
     private let sendMessageUseCase: SendMessageUseCase
     private let sendAttachmentMessageUseCase: SendAttachmentMessageUseCase
-    private let agentReplyDecider: (Int) -> AgentReplyDecision
-    let agentReplyDelayRange: ClosedRange<Double>
+    private let agentService: any AgentServiceProtocol
     let fileStorageService: FileStorageService
 
     // MARK: - Internal State
     private let chatId: String
     private var userMessageCount = 0
-    private var pendingReplyTask: Task<Void, Never>?
+    private var pendingAgentTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
     private var draftSaveTask: Task<Void, Never>?
+    private var streamTask: Task<Void, Never>?
 
     var displayTitle: String {
         chat.title.isEmpty ? "New Chat" : chat.title
@@ -57,8 +57,7 @@ final class ChatDetailViewModel {
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
         fileStorageService: FileStorageService,
-        agentReplyDelayRange: ClosedRange<Double> = 1.0...2.0,
-        agentReplyDecider: ((Int) -> AgentReplyDecision)? = nil
+        agentService: any AgentServiceProtocol
     ) {
         self.chatId = chatId
         self.chat = Chat(id: chatId, title: "", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
@@ -66,7 +65,7 @@ final class ChatDetailViewModel {
         self.messageRepository = messageRepository
         self.router = router
         self.fileStorageService = fileStorageService
-        self.agentReplyDelayRange = agentReplyDelayRange
+        self.agentService = agentService
         self.sendMessageUseCase = SendMessageUseCase(
             chatRepository: chatRepository,
             messageRepository: messageRepository
@@ -75,25 +74,30 @@ final class ChatDetailViewModel {
             fileStorageService: fileStorageService,
             sendMessageUseCase: self.sendMessageUseCase
         )
-
-        let useCase = SimulateAgentReplyUseCase()
-        var rng = SystemRandomNumberGenerator()
-        self.agentReplyDecider = agentReplyDecider ?? { count in
-            useCase.decide(userMessageCount: count, using: &rng)
-        }
-
         loadDraftText()
     }
 
     // MARK: - Message Loading
     func loadMessages() async {
-        async let chatTask = chatRepository.fetch(id: chatId)
-        async let messagesTask = messageRepository.fetchMessages(for: chatId)
-        
-        if let loadedChat = try? await chatTask {
+        if let loadedChat = try? await chatRepository.fetch(id: chatId) {
             chat = loadedChat
         }
-        messages = (try? await messagesTask) ?? []
+
+        // Subscribe to the message stream — keeps messages[] in sync reactively.
+        // The stream emits an initial snapshot immediately, then re-emits on every DB save.
+        streamTask?.cancel()
+        streamTask = Task {
+            for await updated in messageRepository.messageStream(for: chatId) {
+                guard !Task.isCancelled else { break }
+                let previousCount = messages.count
+                messages = updated
+                // Trigger scroll/toast for genuinely new agent messages
+                if updated.count > previousCount,
+                   updated.last?.sender == .agent {
+                    handleNewMessage()
+                }
+            }
+        }
     }
 
     func loadDraftText() {
@@ -155,69 +159,16 @@ final class ChatDetailViewModel {
         chat = updatedChat
         messages.append(message)
         userMessageCount += 1
-
         draftText = ""
         handleNewMessage()
-        scheduleAgentReply(for: userMessageCount)
+        triggerAgentReply(for: userMessageCount)
     }
 
     // MARK: - Agent Reply
-    private func scheduleAgentReply(for count: Int) {
-        pendingReplyTask?.cancel()
-        pendingReplyTask = Task {
-            let delay = Double.random(in: agentReplyDelayRange)
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-
-            let decision = agentReplyDecider(count)
-            guard decision.shouldReply else { return }
-
-            let now = Int64(Date().timeIntervalSince1970 * 1000)
-            let agentMessage: Message
-
-            switch decision.replyType {
-            case .text(let content):
-                agentMessage = Message(
-                    id: UUID().uuidString,
-                    chatId: chat.id,
-                    text: content,
-                    type: .text,
-                    file: nil,
-                    sender: .agent,
-                    timestamp: now
-                )
-            case .image(let urlString):
-                agentMessage = Message(
-                    id: UUID().uuidString,
-                    chatId: chat.id,
-                    text: "",
-                    type: .file,
-                    file: FileAttachment(path: urlString, fileSize: 0, thumbnailPath: nil),
-                    sender: .agent,
-                    timestamp: now
-                )
-            }
-
-            try? await messageRepository.insert(agentMessage)
-            messages.append(agentMessage)
-
-            let agentPreview: String
-            switch decision.replyType {
-            case .text(let content): agentPreview = content
-            case .image: agentPreview = "Sent an image"
-            }
-            let updatedChat = Chat(
-                id: chat.id,
-                title: chat.title,
-                lastMessage: agentPreview,
-                lastMessageTimestamp: now,
-                createdAt: chat.createdAt,
-                updatedAt: now
-            )
-            try? await chatRepository.update(updatedChat)
-            chat = updatedChat
-
-            handleNewMessage()
+    private func triggerAgentReply(for count: Int) {
+        pendingAgentTask?.cancel()
+        pendingAgentTask = Task {
+            await agentService.handleUserMessage(userMessageCount: count, chat: chat)
         }
     }
 
@@ -312,7 +263,7 @@ final class ChatDetailViewModel {
         userMessageCount += 1
         draftText = ""
         handleNewMessage()
-        scheduleAgentReply(for: userMessageCount)
+        triggerAgentReply(for: userMessageCount)
     }
 }
 

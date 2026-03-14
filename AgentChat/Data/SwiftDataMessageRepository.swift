@@ -14,14 +14,36 @@ final actor SwiftDataMessageRepository: MessageRepositoryProtocol {
 
     func fetchMessages(for chatId: String) async throws -> [Message] {
         await initializer.waitForInit()
+        return try _fetchMessages(for: chatId)
+    }
+
+    func messageStream(for chatId: String) -> AsyncStream<[Message]> {
+        AsyncStream { continuation in
+            // Emit current snapshot immediately
+            let initial = (try? self._fetchMessages(for: chatId)) ?? []
+            continuation.yield(initial)
+
+            let task = Task {
+                for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
+                    guard !Task.isCancelled else { break }
+                    let messages = (try? self._fetchMessages(for: chatId)) ?? []
+                    continuation.yield(messages)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    // Synchronous fetch — caller must ensure waitForInit() has already resolved.
+    private func _fetchMessages(for chatId: String) throws -> [Message] {
         let targetChatId = chatId
         let predicate = #Predicate<MessageEntity> { $0.chatId == targetChatId }
         let descriptor = FetchDescriptor<MessageEntity>(
             predicate: predicate,
             sortBy: [SortDescriptor(\.timestamp, order: .forward)]
         )
-        let entities = try modelContext.fetch(descriptor)
-        return entities.map { $0.toMessage() }
+        return try modelContext.fetch(descriptor).map { $0.toMessage() }
     }
 
     func insert(_ message: Message) async throws {

@@ -5,6 +5,7 @@ struct AppView: View {
     let chatRepository: any ChatRepositoryProtocol
     let messageRepository: any MessageRepositoryProtocol
     let fileStorageService: FileStorageService
+    let agentService: any AgentServiceProtocol
 
     var body: some View {
         @Bindable var router = router
@@ -22,7 +23,8 @@ struct AppView: View {
                         chatRepository: chatRepository,
                         messageRepository: messageRepository,
                         router: router,
-                        fileStorageService: fileStorageService
+                        fileStorageService: fileStorageService,
+                        agentService: agentService
                     )
                 }
             }

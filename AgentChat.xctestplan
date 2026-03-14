@@ -14,7 +14,8 @@
       "containerPath" : "container:AgentChat.xcodeproj",
       "identifier" : "75F9780A2F63AD1700268D08",
       "name" : "AgentChat"
-    }
+    },
+    "testExecutionOrdering" : "random"
   },
   "testTargets" : [
     {
