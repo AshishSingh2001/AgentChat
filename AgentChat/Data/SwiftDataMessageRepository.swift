@@ -19,13 +19,18 @@ final actor SwiftDataMessageRepository: MessageRepositoryProtocol {
 
     func messageStream(for chatId: String) -> AsyncStream<[Message]> {
         AsyncStream { continuation in
-            // Emit current snapshot immediately
-            let initial = (try? self._fetchMessages(for: chatId)) ?? []
-            continuation.yield(initial)
-
             let task = Task {
-                for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
+                // Wait for seed before emitting the initial snapshot
+                await initializer.waitForInit()
+                let initial = (try? self._fetchMessages(for: chatId)) ?? []
+                continuation.yield(initial)
+
+                // Filter to saves from this repository's own ModelContext only,
+                // preventing cross-test interference in the test suite.
+                let context = self.modelContext
+                for await notification in NotificationCenter.default.notifications(named: ModelContext.didSave) {
                     guard !Task.isCancelled else { break }
+                    guard (notification.object as? ModelContext) === context else { continue }
                     let messages = (try? self._fetchMessages(for: chatId)) ?? []
                     continuation.yield(messages)
                 }

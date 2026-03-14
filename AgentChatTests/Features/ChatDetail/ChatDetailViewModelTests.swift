@@ -42,14 +42,19 @@ struct ChatDetailViewModelTests {
 
     @Test func sendEmptyMessageIsNoOp() async throws {
         let (vm, _, _, _) = makeVM()
+        await vm.loadMessages()
         await vm.sendMessage(text: "")
         await vm.sendMessage(text: "   ")
+        try await Task.sleep(for: .milliseconds(50))
         #expect(vm.messages.isEmpty)
     }
 
-    @Test func sendMessageAppendsUserMessage() async throws {
+    // Fully reactive: message appears via stream after DB insert
+    @Test func sendMessageAppearsViaStream() async throws {
         let (vm, _, _, _) = makeVM()
+        await vm.loadMessages()
         await vm.sendMessage(text: "Hello")
+        try await Task.sleep(for: .milliseconds(50))
         #expect(vm.messages.count == 1)
         #expect(vm.messages[0].text == "Hello")
         #expect(vm.messages[0].sender == .user)
@@ -57,6 +62,7 @@ struct ChatDetailViewModelTests {
 
     @Test func sendMessageClearsDraft() async throws {
         let (vm, _, _, _) = makeVM()
+        await vm.loadMessages()
         vm.draftText = "work in progress"
         await vm.sendMessage(text: "Hello")
         vm.saveDraftImmediately()
@@ -66,19 +72,23 @@ struct ChatDetailViewModelTests {
 
     @Test func sendMessageAutoTitlesChat() async throws {
         let (vm, _, _, _) = makeVM()
+        await vm.loadMessages()
         await vm.sendMessage(text: "Plan a trip to Paris")
         #expect(vm.chat.title == "Plan a trip to Paris")
     }
 
     @Test func secondMessageDoesNotOverwriteTitle() async throws {
         let (vm, _, _, _) = makeVM()
+        await vm.loadMessages()
         await vm.sendMessage(text: "First message")
+        try await Task.sleep(for: .milliseconds(50))
         await vm.sendMessage(text: "Second message")
         #expect(vm.chat.title == "First message")
     }
 
     @Test func agentServiceCalledAfterSend() async throws {
         let (vm, _, _, agent) = makeVM()
+        await vm.loadMessages()
         await vm.sendMessage(text: "Hello")
         try await Task.sleep(for: .milliseconds(50))
         #expect(agent.handleUserMessageCalled == true)
@@ -87,7 +97,6 @@ struct ChatDetailViewModelTests {
 
     @Test func agentReplyAppearsViaStream() async throws {
         let (vm, _, msgRepo, agent) = makeVM()
-        // Agent inserts a message into the repo, which the stream emits to the VM
         agent.onHandleUserMessage = { _, _ in
             try? await msgRepo.insert(Message(
                 id: "agent-1",
@@ -109,7 +118,6 @@ struct ChatDetailViewModelTests {
 
     @Test func agentDoesNotReplyWhenServiceSkips() async throws {
         let (vm, _, _, _) = makeVM()
-        // MockAgentService does nothing by default (no insert)
         await vm.loadMessages()
         await vm.sendMessage(text: "Hello")
         try await Task.sleep(for: .milliseconds(200))
@@ -141,18 +149,23 @@ struct ChatDetailViewModelTests {
         #expect(agentMessages.count == 1)
     }
 
-    @Test func nearBottomTriggersAutoScroll() async throws {
-        let (vm, _, _, _) = makeVM()
+    // Scroll/toast triggered by stream (any new message)
+    @Test func nearBottomTriggersAutoScrollOnStreamEmit() async throws {
+        let (vm, _, msgRepo, _) = makeVM()
+        await vm.loadMessages()
         vm.isNearBottom = true
         vm.shouldScrollToBottom = false
-        await vm.sendMessage(text: "Hello")
+        try? await msgRepo.insert(Message(id: "m1", chatId: "c1", text: "Hi", type: .text, file: nil, sender: .user, timestamp: 0))
+        try await Task.sleep(for: .milliseconds(50))
         #expect(vm.shouldScrollToBottom == true)
     }
 
-    @Test func farFromBottomShowsToast() async throws {
-        let (vm, _, _, _) = makeVM()
+    @Test func farFromBottomShowsToastOnStreamEmit() async throws {
+        let (vm, _, msgRepo, _) = makeVM()
+        await vm.loadMessages()
         vm.isNearBottom = false
-        await vm.sendMessage(text: "Hello")
+        try? await msgRepo.insert(Message(id: "m1", chatId: "c1", text: "Hi", type: .text, file: nil, sender: .user, timestamp: 0))
+        try await Task.sleep(for: .milliseconds(50))
         #expect(vm.showNewMessageToast == true)
     }
 
@@ -225,10 +238,12 @@ struct ChatDetailViewModelTests {
 
     @Test func sendWithAttachmentAppendsFileMessage() async throws {
         let (vm, _, _, _) = makeVM()
+        await vm.loadMessages()
         let imageData = UIImage(systemName: "photo")!.jpegData(compressionQuality: 0.8) ?? Data()
         let image = UIImage(systemName: "photo")!
         vm.setPendingAttachment(PendingAttachment(data: imageData, previewImage: image))
         await vm.sendWithAttachment()
+        try await Task.sleep(for: .milliseconds(50))
         #expect(vm.messages.count == 1)
         #expect(vm.messages[0].type == .file)
         #expect(vm.messages[0].sender == .user)

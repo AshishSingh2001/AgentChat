@@ -8,7 +8,7 @@ struct SendAttachmentMessageUseCase {
         attachment: PendingAttachment,
         text: String,
         chat: Chat,
-        existingMessageCount: Int
+        isFirstMessage: Bool
     ) async throws -> (message: Message, updatedChat: Chat) {
         let filename = UUID().uuidString + ".jpg"
         let savedPath = try fileStorageService.save(data: attachment.data, filename: filename)
@@ -29,7 +29,7 @@ struct SendAttachmentMessageUseCase {
             text: text,
             file: fileAttachment,
             chat: chat,
-            existingMessageCount: existingMessageCount
+            isFirstMessage: isFirstMessage
         )
     }
 }

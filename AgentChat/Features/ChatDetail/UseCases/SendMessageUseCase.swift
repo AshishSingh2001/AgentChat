@@ -10,7 +10,7 @@ struct SendMessageUseCase {
         text: String,
         file: FileAttachment? = nil,
         chat: Chat,
-        existingMessageCount: Int
+        isFirstMessage: Bool
     ) async throws -> (message: Message, updatedChat: Chat) {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty || file != nil else {
@@ -29,7 +29,7 @@ struct SendMessageUseCase {
         )
         try await messageRepository.insert(message)
 
-        let newTitle = (existingMessageCount == 0 && !trimmed.isEmpty)
+        let newTitle = (isFirstMessage && !trimmed.isEmpty)
             ? String(trimmed.prefix(30))
             : chat.title
         let newLastMessage = (file != nil && trimmed.isEmpty) ? "Attachment" : trimmed

@@ -5,8 +5,8 @@ import Foundation
 @MainActor
 struct SendMessageUseCaseTests {
 
-    private func makeChat() -> Chat {
-        Chat(id: "chat-1", title: "New Chat", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+    private func makeChat(title: String = "New Chat") -> Chat {
+        Chat(id: "chat-1", title: title, lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
     }
 
     @Test func insertsMessage() async throws {
@@ -16,7 +16,7 @@ struct SendMessageUseCaseTests {
         let chat = makeChat()
         chatRepo.chats = [chat]
 
-        let (message, _) = try await useCase.execute(text: "Hello", chat: chat, existingMessageCount: 0)
+        let (message, _) = try await useCase.execute(text: "Hello", chat: chat, isFirstMessage: true)
         #expect(message.text == "Hello")
         #expect(message.sender == .user)
         #expect(message.chatId == "chat-1")
@@ -30,7 +30,7 @@ struct SendMessageUseCaseTests {
         let chat = makeChat()
         chatRepo.chats = [chat]
 
-        let (_, updatedChat) = try await useCase.execute(text: "Hello", chat: chat, existingMessageCount: 0)
+        let (_, updatedChat) = try await useCase.execute(text: "Hello", chat: chat, isFirstMessage: true)
         #expect(updatedChat.lastMessage == "Hello")
         #expect(chatRepo.updatedChat?.lastMessage == "Hello")
     }
@@ -45,7 +45,7 @@ struct SendMessageUseCaseTests {
         let (_, updatedChat) = try await useCase.execute(
             text: "Book a flight to Mumbai",
             chat: chat,
-            existingMessageCount: 0
+            isFirstMessage: true
         )
         #expect(updatedChat.title == "Book a flight to Mumbai")
     }
@@ -58,7 +58,7 @@ struct SendMessageUseCaseTests {
         chatRepo.chats = [chat]
 
         let longText = "This is a very long message that exceeds thirty characters easily"
-        let (_, updatedChat) = try await useCase.execute(text: longText, chat: chat, existingMessageCount: 0)
+        let (_, updatedChat) = try await useCase.execute(text: longText, chat: chat, isFirstMessage: true)
         #expect(updatedChat.title.count <= 30)
     }
 
@@ -66,13 +66,13 @@ struct SendMessageUseCaseTests {
         let chatRepo = MockChatRepository()
         let msgRepo = MockMessageRepository()
         let useCase = SendMessageUseCase(chatRepository: chatRepo, messageRepository: msgRepo)
-        let chat = Chat(id: "chat-1", title: "Custom Title", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        let chat = makeChat(title: "Custom Title")
         chatRepo.chats = [chat]
 
         let (_, updatedChat) = try await useCase.execute(
             text: "Second message",
             chat: chat,
-            existingMessageCount: 1
+            isFirstMessage: false
         )
         #expect(updatedChat.title == "Custom Title")
     }
@@ -86,7 +86,7 @@ struct SendMessageUseCaseTests {
 
         var threw = false
         do {
-            _ = try await useCase.execute(text: "", file: nil, chat: chat, existingMessageCount: 0)
+            _ = try await useCase.execute(text: "", file: nil, chat: chat, isFirstMessage: true)
         } catch SendMessageError.emptyMessage {
             threw = true
         }

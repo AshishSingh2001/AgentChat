@@ -83,17 +83,15 @@ final class ChatDetailViewModel {
             chat = loadedChat
         }
 
-        // Subscribe to the message stream — keeps messages[] in sync reactively.
-        // The stream emits an initial snapshot immediately, then re-emits on every DB save.
+        // Fully reactive: stream is the single source of truth for messages[].
+        // Never append optimistically — wait for stream emission after each DB write.
         streamTask?.cancel()
         streamTask = Task {
             for await updated in messageRepository.messageStream(for: chatId) {
                 guard !Task.isCancelled else { break }
-                let previousCount = messages.count
+                let isNewMessage = updated.count > messages.count
                 messages = updated
-                // Trigger scroll/toast for genuinely new agent messages
-                if updated.count > previousCount,
-                   updated.last?.sender == .agent {
+                if isNewMessage {
                     handleNewMessage()
                 }
             }
@@ -149,18 +147,16 @@ final class ChatDetailViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty || file != nil else { return }
 
-        guard let (message, updatedChat) = try? await sendMessageUseCase.execute(
+        guard let (_, updatedChat) = try? await sendMessageUseCase.execute(
             text: trimmed,
             file: file,
             chat: chat,
-            existingMessageCount: messages.count
+            isFirstMessage: messages.isEmpty
         ) else { return }
 
         chat = updatedChat
-        messages.append(message)
         userMessageCount += 1
         draftText = ""
-        handleNewMessage()
         triggerAgentReply(for: userMessageCount)
     }
 
@@ -251,18 +247,16 @@ final class ChatDetailViewModel {
         guard let attachment = pendingAttachment else { return }
         pendingAttachment = nil
 
-        guard let (message, updatedChat) = try? await sendAttachmentMessageUseCase.execute(
+        guard let (_, updatedChat) = try? await sendAttachmentMessageUseCase.execute(
             attachment: attachment,
             text: draftText.trimmingCharacters(in: .whitespaces),
             chat: chat,
-            existingMessageCount: messages.count
+            isFirstMessage: messages.isEmpty
         ) else { return }
 
         chat = updatedChat
-        messages.append(message)
         userMessageCount += 1
         draftText = ""
-        handleNewMessage()
         triggerAgentReply(for: userMessageCount)
     }
 }
