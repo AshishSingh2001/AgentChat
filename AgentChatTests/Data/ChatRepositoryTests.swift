@@ -10,7 +10,7 @@ struct ChatRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataChatRepository(modelContainer: container)
+        let repo = SwiftDataChatRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
         let result = try await repo.fetchAll()
         #expect(result.isEmpty)
     }
@@ -20,7 +20,7 @@ struct ChatRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataChatRepository(modelContainer: container)
+        let repo = SwiftDataChatRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let chat = Chat(
             id: "chat-001",
@@ -43,7 +43,7 @@ struct ChatRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataChatRepository(modelContainer: container)
+        let repo = SwiftDataChatRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let chat1 = Chat(
             id: "chat-001",
@@ -76,7 +76,7 @@ struct ChatRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataChatRepository(modelContainer: container)
+        let repo = SwiftDataChatRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let chat = Chat(
             id: "chat-001",
@@ -109,7 +109,7 @@ struct ChatRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataChatRepository(modelContainer: container)
+        let repo = SwiftDataChatRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let chat = Chat(
             id: "chat-001",

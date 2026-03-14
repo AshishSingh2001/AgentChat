@@ -65,11 +65,5 @@ struct ChatListView: View {
         .onChange(of: router.path.count) {
             Task { await viewModel.loadChats() }
         }
-        .task(id: viewModel.chats.isEmpty) {
-            if viewModel.chats.isEmpty && !viewModel.isLoading {
-                try? await Task.sleep(for: .milliseconds(500))
-                await viewModel.loadChats()
-            }
-        }
     }
 }

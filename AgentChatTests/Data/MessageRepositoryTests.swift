@@ -10,7 +10,7 @@ struct MessageRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataMessageRepository(modelContainer: container)
+        let repo = SwiftDataMessageRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let result = try await repo.fetchMessages(for: "unknown-chat")
         #expect(result.isEmpty)
@@ -21,7 +21,7 @@ struct MessageRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataMessageRepository(modelContainer: container)
+        let repo = SwiftDataMessageRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let message = Message(
             id: "msg-001",
@@ -45,7 +45,7 @@ struct MessageRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataMessageRepository(modelContainer: container)
+        let repo = SwiftDataMessageRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let message1 = Message(
             id: "msg-001",
@@ -80,8 +80,8 @@ struct MessageRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let chatRepo = SwiftDataChatRepository(modelContainer: container)
-        let messageRepo = SwiftDataMessageRepository(modelContainer: container)
+        let chatRepo = SwiftDataChatRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
+        let messageRepo = SwiftDataMessageRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         // Create a chat directly
         let chat = Chat(
@@ -119,7 +119,7 @@ struct MessageRepositoryTests {
             for: ChatEntity.self, MessageEntity.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
-        let repo = SwiftDataMessageRepository(modelContainer: container)
+        let repo = SwiftDataMessageRepository(modelContainer: container, initializer: DatabaseInitializer(readyForTesting: true))
 
         let message1 = Message(
             id: "msg-001",

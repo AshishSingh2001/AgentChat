@@ -1,9 +1,19 @@
 import Foundation
 import SwiftData
 
-@ModelActor
 final actor SwiftDataChatRepository: ChatRepositoryProtocol {
+    private let modelContainer: ModelContainer
+    private let modelContext: ModelContext
+    private let initializer: DatabaseInitializer
+
+    init(modelContainer: ModelContainer, initializer: DatabaseInitializer) {
+        self.modelContainer = modelContainer
+        self.modelContext = ModelContext(modelContainer)
+        self.initializer = initializer
+    }
+
     func fetchAll() async throws -> [Chat] {
+        await initializer.waitForInit()
         let descriptor = FetchDescriptor<ChatEntity>(
             sortBy: [SortDescriptor(\.lastMessageTimestamp, order: .reverse)]
         )
@@ -12,6 +22,7 @@ final actor SwiftDataChatRepository: ChatRepositoryProtocol {
     }
 
     func fetch(id: String) async throws -> Chat? {
+        await initializer.waitForInit()
         let chatId = id
         let predicate = #Predicate<ChatEntity> { $0.id == chatId }
         var descriptor = FetchDescriptor<ChatEntity>(predicate: predicate)
@@ -20,12 +31,14 @@ final actor SwiftDataChatRepository: ChatRepositoryProtocol {
     }
 
     func create(_ chat: Chat) async throws {
+        await initializer.waitForInit()
         let entity = ChatEntity.from(chat)
         modelContext.insert(entity)
         try save()
     }
 
     func update(_ chat: Chat) async throws {
+        await initializer.waitForInit()
         let chatId = chat.id
         let predicate = #Predicate<ChatEntity> { $0.id == chatId }
         var descriptor = FetchDescriptor<ChatEntity>(predicate: predicate)
@@ -41,6 +54,7 @@ final actor SwiftDataChatRepository: ChatRepositoryProtocol {
     }
 
     func delete(id: String) async throws {
+        await initializer.waitForInit()
         let chatId = id
         let predicate = #Predicate<ChatEntity> { $0.id == chatId }
         var descriptor = FetchDescriptor<ChatEntity>(predicate: predicate)

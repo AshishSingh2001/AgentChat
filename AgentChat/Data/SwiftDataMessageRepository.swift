@@ -1,9 +1,19 @@
 import Foundation
 import SwiftData
 
-@ModelActor
 final actor SwiftDataMessageRepository: MessageRepositoryProtocol {
+    private let modelContainer: ModelContainer
+    private let modelContext: ModelContext
+    private let initializer: DatabaseInitializer
+
+    init(modelContainer: ModelContainer, initializer: DatabaseInitializer) {
+        self.modelContainer = modelContainer
+        self.modelContext = ModelContext(modelContainer)
+        self.initializer = initializer
+    }
+
     func fetchMessages(for chatId: String) async throws -> [Message] {
+        await initializer.waitForInit()
         let targetChatId = chatId
         let predicate = #Predicate<MessageEntity> { $0.chatId == targetChatId }
         let descriptor = FetchDescriptor<MessageEntity>(
@@ -15,10 +25,10 @@ final actor SwiftDataMessageRepository: MessageRepositoryProtocol {
     }
 
     func insert(_ message: Message) async throws {
+        await initializer.waitForInit()
         let entity = MessageEntity.from(message)
         modelContext.insert(entity)
 
-        // Update parent chat's lastMessage and lastMessageTimestamp
         let targetChatId = message.chatId
         let chatPredicate = #Predicate<ChatEntity> { $0.id == targetChatId }
         var chatDescriptor = FetchDescriptor<ChatEntity>(predicate: chatPredicate)
@@ -33,6 +43,7 @@ final actor SwiftDataMessageRepository: MessageRepositoryProtocol {
     }
 
     func deleteAll(for chatId: String) async throws {
+        await initializer.waitForInit()
         let targetChatId = chatId
         let predicate = #Predicate<MessageEntity> { $0.chatId == targetChatId }
         let descriptor = FetchDescriptor<MessageEntity>(predicate: predicate)
