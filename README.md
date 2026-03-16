@@ -1,5 +1,7 @@
 # AgentChat
 
+Demo : https://drive.google.com/file/d/1ZkLbh__vmUaebd4SXWk4rpxvpzA5kGIU/view?usp=drive_link
+
 AgentChat is an offline-first multi-chat iOS app where users have conversations with a simulated AI agent. Every message, image, and chat is persisted locally — there is no network dependency, no sign-in, and no loading states. The app launches straight into your chats.
 
 The agent replies automatically after a short delay, occasionally responding with images. It debounces on rapid sends, counts the gap since its last reply to decide when to respond, and updates the chat list preview in real time. The UI is built entirely in SwiftUI with Clean Architecture + MVVM, GRDB for persistence, and reactive streams as the sole source of truth for the message list.
