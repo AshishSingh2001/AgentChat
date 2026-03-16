@@ -24,6 +24,7 @@ struct TimestampFormatter {
         // Check if same day
         if calendar.isDateInToday(date) {
             let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.dateFormat = "h:mm a"
             return formatter.string(from: date)
         }
@@ -53,6 +54,7 @@ struct TimestampFormatter {
     static func timeString(from milliseconds: Int64) -> String {
         let date = Date(timeIntervalSince1970: Double(milliseconds) / 1000)
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }

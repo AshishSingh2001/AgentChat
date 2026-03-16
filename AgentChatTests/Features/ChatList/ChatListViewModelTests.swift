@@ -45,8 +45,8 @@ struct ChatListViewModelTests {
         vm.startStream()
         await vm.createNewChat()
         #expect(router.pushedRoutes.count == 1)
-        if case .chatDetail(let chatId) = router.pushedRoutes[0] {
-            #expect(!chatId.isEmpty)
+        if case .chatDetail(let chat) = router.pushedRoutes[0] {
+            #expect(!chat.id.isEmpty)
         } else {
             Issue.record("Expected .chatDetail route")
         }
@@ -86,5 +86,67 @@ struct ChatListViewModelTests {
         await drainStream()
         #expect(vm.chats[0].title == "New")
         #expect(vm.chats[0].lastMessage == "Hi")
+    }
+
+    @Test func draftTextUpdateReflectsInChatList() async throws {
+        let (vm, chatRepo, _, _) = makeVM()
+        let chat = Chat(id: "1", title: "My Chat", lastMessage: "old msg", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        chatRepo.chats = [chat]
+        vm.startStream()
+        await drainStream()
+        #expect(vm.chats[0].draftText == "")
+
+        let withDraft = Chat(id: "1", title: "My Chat", lastMessage: "old msg", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0, draftText: "half typed")
+        try? await chatRepo.update(withDraft)
+        await drainStream()
+        #expect(vm.chats[0].draftText == "half typed")
+    }
+
+    @Test func emptyDraftClearedInChatListAfterUpdate() async throws {
+        let (vm, chatRepo, _, _) = makeVM()
+        let chat = Chat(id: "1", title: "My Chat", lastMessage: "old msg", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0, draftText: "half typed")
+        chatRepo.chats = [chat]
+        vm.startStream()
+        await drainStream()
+        #expect(vm.chats[0].draftText == "half typed")
+
+        let cleared = Chat(id: "1", title: "My Chat", lastMessage: "old msg", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0, draftText: "")
+        try? await chatRepo.update(cleared)
+        await drainStream()
+        #expect(vm.chats[0].draftText == "")
+    }
+
+    @Test func createNewChatSetsErrorMessageOnFailure() async throws {
+        let (vm, chatRepo, _, _) = makeVM()
+        chatRepo.shouldThrowError = ChatError.createFailed(underlying: nil)
+        chatRepo.errorOnMethod = .create
+        vm.startStream()
+        await vm.createNewChat()
+        #expect(vm.errorMessage != nil)
+        #expect(vm.errorMessage == ChatError.createFailed(underlying: nil).localizedDescription)
+    }
+
+    @Test func deleteChatSetsErrorMessageOnFailure() async throws {
+        let (vm, chatRepo, _, _) = makeVM()
+        let chat = Chat(id: "x", title: "T", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        chatRepo.chats = [chat]
+        chatRepo.shouldThrowError = ChatError.deleteFailed(underlying: nil)
+        chatRepo.errorOnMethod = .delete
+        vm.startStream()
+        await drainStream()
+        await vm.deleteChat(chat)
+        #expect(vm.errorMessage != nil)
+        #expect(vm.errorMessage == ChatError.deleteFailed(underlying: nil).localizedDescription)
+    }
+
+    @Test func dismissErrorClearsErrorMessage() async throws {
+        let (vm, chatRepo, _, _) = makeVM()
+        chatRepo.shouldThrowError = ChatError.createFailed(underlying: nil)
+        chatRepo.errorOnMethod = .create
+        vm.startStream()
+        await vm.createNewChat()
+        #expect(vm.errorMessage != nil)
+        vm.dismissError()
+        #expect(vm.errorMessage == nil)
     }
 }

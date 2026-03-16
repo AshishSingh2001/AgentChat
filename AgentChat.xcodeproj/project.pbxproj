@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		751D22EB2F63CBB400610A1C /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB7C3D5E0A8F1B4629E70C34 /* SDWebImageSwiftUI */; };
+		CC1A2B3D4E5F6A7890123456 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = DD2B3C4E5F6A7B8901234567 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +59,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				751D22EB2F63CBB400610A1C /* SDWebImageSwiftUI in Frameworks */,
+				CC1A2B3D4E5F6A7890123456 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -120,6 +122,7 @@
 			name = AgentChat;
 			packageProductDependencies = (
 				BB7C3D5E0A8F1B4629E70C34 /* SDWebImageSwiftUI */,
+				DD2B3C4E5F6A7B8901234567 /* GRDB */,
 			);
 			productName = AgentChat;
 			productReference = 75F9780B2F63AD1700268D08 /* AgentChat.app */;
@@ -205,6 +208,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA4B8F2A1C9D3E750F6B2891 /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
+				EE3C4D5F6A7B8C9012345678 /* XCRemoteSwiftPackageReference "GRDB" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 75F9780C2F63AD1700268D08 /* Products */;
@@ -603,6 +607,14 @@
 				minimumVersion = 3.0.0;
 			};
 		};
+		EE3C4D5F6A7B8C9012345678 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -610,6 +622,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA4B8F2A1C9D3E750F6B2891 /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
 			productName = SDWebImageSwiftUI;
+		};
+		DD2B3C4E5F6A7B8901234567 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EE3C4D5F6A7B8C9012345678 /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

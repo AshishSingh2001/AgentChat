@@ -1,125 +1,101 @@
 import Foundation
 import Testing
-import SwiftData
+import GRDB
 @testable import AgentChat
 
 @MainActor
 struct SeedDataLoaderTests {
 
-    @Test func loadIfNeededInsertThreeChats() async throws {
-        let container = try ModelContainer(
-            for: ChatEntity.self, MessageEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let loader = SeedDataLoader(modelContainer: container)
+    private func makeDB() throws -> AppDatabase {
+        try AppDatabase.inMemory()
+    }
+
+    @Test func loadIfNeededInsertThreeChats() throws {
+        let db = try makeDB()
+        let loader = SeedDataLoader(appDatabase: db)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-        try await loader.loadIfNeeded()
+        try loader.loadIfNeeded()
 
-        let context = ModelContext(container)
-        let chats = try context.fetch(FetchDescriptor<ChatEntity>())
+        let chats = try db.dbQueue.read { try ChatRecord.fetchAll($0) }
         #expect(chats.count == 3)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
     }
 
-    @Test func loadIfNeededIsNoOpOnSecondCall() async throws {
-        let container = try ModelContainer(
-            for: ChatEntity.self, MessageEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let loader = SeedDataLoader(modelContainer: container)
+    @Test func loadIfNeededIsNoOpOnSecondCall() throws {
+        let db = try makeDB()
+        let loader = SeedDataLoader(appDatabase: db)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-        try await loader.loadIfNeeded()
+        try loader.loadIfNeeded()
 
-        var context = ModelContext(container)
-        var chats = try context.fetch(FetchDescriptor<ChatEntity>())
+        var chats = try db.dbQueue.read { try ChatRecord.fetchAll($0) }
         #expect(chats.count == 3)
 
-        // Call again without clearing the flag
-        try await loader.loadIfNeeded()
+        // Call again without clearing the flag — should be a no-op
+        try loader.loadIfNeeded()
 
-        context = ModelContext(container)
-        chats = try context.fetch(FetchDescriptor<ChatEntity>())
+        chats = try db.dbQueue.read { try ChatRecord.fetchAll($0) }
         #expect(chats.count == 3)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
     }
 
-    @Test func chatOneHasTenMessages() async throws {
-        let container = try ModelContainer(
-            for: ChatEntity.self, MessageEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let loader = SeedDataLoader(modelContainer: container)
+    @Test func chatOneHasTenMessages() throws {
+        let db = try makeDB()
+        let loader = SeedDataLoader(appDatabase: db)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-        try await loader.loadIfNeeded()
+        try loader.loadIfNeeded()
 
-        let context = ModelContext(container)
-        let predicate = #Predicate<MessageEntity> { $0.chatId == "chat-001" }
-        let descriptor = FetchDescriptor<MessageEntity>(predicate: predicate)
-        let messages = try context.fetch(descriptor)
+        let messages = try db.dbQueue.read {
+            try MessageRecord.filter(Column("chatId") == "chat-001").fetchAll($0)
+        }
         #expect(messages.count == 10)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
     }
 
-    @Test func chatTwoHasSixMessages() async throws {
-        let container = try ModelContainer(
-            for: ChatEntity.self, MessageEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let loader = SeedDataLoader(modelContainer: container)
+    @Test func chatTwoHasSixMessages() throws {
+        let db = try makeDB()
+        let loader = SeedDataLoader(appDatabase: db)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-        try await loader.loadIfNeeded()
+        try loader.loadIfNeeded()
 
-        let context = ModelContext(container)
-        let predicate = #Predicate<MessageEntity> { $0.chatId == "chat-002" }
-        let descriptor = FetchDescriptor<MessageEntity>(predicate: predicate)
-        let messages = try context.fetch(descriptor)
+        let messages = try db.dbQueue.read {
+            try MessageRecord.filter(Column("chatId") == "chat-002").fetchAll($0)
+        }
         #expect(messages.count == 6)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
     }
 
-    @Test func chatThreeHasFiveMessages() async throws {
-        let container = try ModelContainer(
-            for: ChatEntity.self, MessageEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let loader = SeedDataLoader(modelContainer: container)
+    @Test func chatThreeHasFiveMessages() throws {
+        let db = try makeDB()
+        let loader = SeedDataLoader(appDatabase: db)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-        try await loader.loadIfNeeded()
+        try loader.loadIfNeeded()
 
-        let context = ModelContext(container)
-        let predicate = #Predicate<MessageEntity> { $0.chatId == "chat-003" }
-        let descriptor = FetchDescriptor<MessageEntity>(predicate: predicate)
-        let messages = try context.fetch(descriptor)
+        let messages = try db.dbQueue.read {
+            try MessageRecord.filter(Column("chatId") == "chat-003").fetchAll($0)
+        }
         #expect(messages.count == 5)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
     }
 
-    @Test func chatOneLastMessageIsCorrect() async throws {
-        let container = try ModelContainer(
-            for: ChatEntity.self, MessageEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let loader = SeedDataLoader(modelContainer: container)
+    @Test func chatOneLastMessageIsCorrect() throws {
+        let db = try makeDB()
+        let loader = SeedDataLoader(appDatabase: db)
 
         UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-        try await loader.loadIfNeeded()
+        try loader.loadIfNeeded()
 
-        let context = ModelContext(container)
-        let predicate = #Predicate<ChatEntity> { $0.id == "chat-001" }
-        var descriptor = FetchDescriptor<ChatEntity>(predicate: predicate)
-        descriptor.fetchLimit = 1
-        let chats = try context.fetch(descriptor)
-        guard let chat = chats.first else {
+        let chat = try db.dbQueue.read { try ChatRecord.fetchOne($0, key: "chat-001") }
+        guard let chat else {
             Issue.record("Chat-001 not found")
             return
         }

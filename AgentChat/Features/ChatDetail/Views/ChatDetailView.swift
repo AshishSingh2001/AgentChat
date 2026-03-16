@@ -2,79 +2,98 @@ import SwiftUI
 
 struct ChatDetailView: View {
     @State private var viewModel: ChatDetailViewModel
+    let fileStorageService: any FileStorageServiceProtocol
 
     init(
-        chatId: String,
+        chat: Chat,
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
         fileStorageService: any FileStorageServiceProtocol,
         agentService: any AgentServiceProtocol
     ) {
+        self.fileStorageService = fileStorageService
         _viewModel = State(initialValue: ChatDetailViewModel(
-            chatId: chatId,
+            chat: chat,
             chatRepository: chatRepository,
             messageRepository: messageRepository,
             router: router,
-            fileStorageService: fileStorageService,
             agentService: agentService
         ))
     }
 
     var body: some View {
-        let title = viewModel.displayTitle
+        @Bindable var titleVM = viewModel.title
+
         VStack(spacing: 0) {
-            MessageListView(viewModel: viewModel, fileStorageService: viewModel.fileStorageService)
+            MessageListView(
+                viewModel: viewModel,
+                fileStorageService: fileStorageService
+            )
+
             InputBarView(
-                text: viewModel.binding(for: \.draftText),
+                text: Binding(
+                    get: { viewModel.draft.text },
+                    set: { viewModel.draft.text = $0 }
+                ),
                 onSend: {
-                    Task { await viewModel.sendMessage(text: viewModel.draftText) }
-                },
-                onAttachmentPicked: { data, image in
-                    viewModel.setPendingAttachment(PendingAttachment(data: data, previewImage: image))
-                },
-                onSendWithAttachment: {
-                    Task { await viewModel.sendWithAttachment() }
-                },
-                pendingAttachment: viewModel.pendingAttachment,
-                onClearAttachment: {
-                    viewModel.clearPendingAttachment()
+                    Task { await viewModel.sendMessage(text: viewModel.draft.text) }
                 }
             )
         }
-        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Button {
-                    viewModel.startTitleEdit()
-                } label: {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                }
+                ChatTitleButton(titleVM: viewModel.title)
             }
         }
-        .sheet(isPresented: viewModel.binding(for: \.isTitleEditing)) {
+
+        .sheet(isPresented: $titleVM.isTitleEditing) {
             TitleEditSheet(
-                title: viewModel.chat.title,
+                title: titleVM.chat.title,
                 onCommit: { newTitle in
                     Task { await viewModel.commitTitleEdit(newTitle: newTitle) }
                 }
             )
             .presentationDetents([.height(160)])
         }
-        .fullScreenCover(item: viewModel.binding(for: \.selectedImageForViewer)) { item in
-            ImageViewerView(item: item) {
-                viewModel.dismissImageViewer()
-            }
+
+        .navigationDestination(item: Binding(
+            get: { viewModel.imageViewer.selectedImageURL.map { ImageViewerItem(url: $0) } },
+            set: { if $0 == nil { viewModel.imageViewer.dismiss() } }
+        )) { item in
+            ImageViewerView(item: item)
+                .navigationBarHidden(true)
         }
+
         .onDisappear {
+            viewModel.cleanUpIfEmpty()
             viewModel.saveDraftImmediately()
         }
+
         .task {
             await viewModel.loadMessages()
         }
+
+        .errorAlert(errorMessage: Binding(
+            get: { viewModel.errorMessage },
+            set: { _ in viewModel.dismissError() }
+        ))
+    }
+}
+
+private struct ChatTitleButton: View {
+    var titleVM: TitleViewModel
+
+    var body: some View {
+        Button {
+            titleVM.startEdit()
+        } label: {
+            Text(titleVM.displayTitle)
+                .font(.headline)
+                .foregroundStyle(.primary)
+        }
+        .accessibilityIdentifier("chatTitleButton")
     }
 }
 

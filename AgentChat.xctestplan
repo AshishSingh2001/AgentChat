@@ -9,6 +9,15 @@
     }
   ],
   "defaultOptions" : {
+    "codeCoverage" : {
+      "targets" : [
+        {
+          "containerPath" : "container:AgentChat.xcodeproj",
+          "identifier" : "75F9780A2F63AD1700268D08",
+          "name" : "AgentChat"
+        }
+      ]
+    },
     "performanceAntipatternCheckerEnabled" : true,
     "targetForVariableExpansion" : {
       "containerPath" : "container:AgentChat.xcodeproj",
@@ -27,7 +36,6 @@
       }
     },
     {
-      "parallelizable" : true,
       "target" : {
         "containerPath" : "container:AgentChat.xcodeproj",
         "identifier" : "75F978232F63AD1800268D08",

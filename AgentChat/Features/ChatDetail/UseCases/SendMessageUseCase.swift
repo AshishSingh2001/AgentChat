@@ -48,6 +48,13 @@ struct SendMessageUseCase {
     }
 }
 
-enum SendMessageError: Error, Equatable {
+enum SendMessageError: Error, LocalizedError, Equatable {
     case emptyMessage
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyMessage:
+            return "Message cannot be empty"
+        }
+    }
 }

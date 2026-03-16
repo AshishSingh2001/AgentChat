@@ -1,14 +1,17 @@
 import SwiftUI
 import SDWebImageSwiftUI
 
-struct ImageViewerItem: Identifiable {
+struct ImageViewerItem: Identifiable, Hashable {
     let id = UUID()
     let url: URL
+
+    static func == (lhs: ImageViewerItem, rhs: ImageViewerItem) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct ImageViewerView: View {
     let item: ImageViewerItem
-    let onDismiss: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
@@ -72,7 +75,7 @@ struct ImageViewerView: View {
                                 lastPanOffset = panOffset
                             } else {
                                 if abs(value.translation.height) > 100 {
-                                    onDismiss()
+                                    dismiss()
                                 } else {
                                     withAnimation(.spring) {
                                         dragOffset = .zero
@@ -98,7 +101,7 @@ struct ImageViewerView: View {
             }
 
             Button {
-                onDismiss()
+                dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 30))
@@ -106,6 +109,7 @@ struct ImageViewerView: View {
                     .foregroundStyle(.white, Color(.systemGray2).opacity(0.7))
                     .padding(16)
             }
+            .accessibilityIdentifier("imageViewerCloseButton")
         }
     }
 }

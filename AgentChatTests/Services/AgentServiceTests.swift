@@ -2,6 +2,26 @@ import Testing
 import Foundation
 @testable import AgentChat
 
+// A decider that always replies with a fixed text response — isolates AgentService logic
+// from SimulateAgentReplyUseCase interval logic.
+private struct AlwaysReplyDecider: AgentDecider {
+    func decide(userMessagesSinceLastReply: Int, using rng: inout some RandomNumberGenerator) -> AgentReplyDecision {
+        guard userMessagesSinceLastReply > 0 else {
+            return AgentReplyDecision(shouldReply: false, replyType: .text(""))
+        }
+        return AgentReplyDecision(shouldReply: true, replyType: .text("Hello from agent"))
+    }
+}
+
+private struct AlwaysImageDecider: AgentDecider {
+    func decide(userMessagesSinceLastReply: Int, using rng: inout some RandomNumberGenerator) -> AgentReplyDecision {
+        guard userMessagesSinceLastReply > 0 else {
+            return AgentReplyDecision(shouldReply: false, replyType: .text(""))
+        }
+        return AgentReplyDecision(shouldReply: true, replyType: .image("https://picsum.photos/400/300"))
+    }
+}
+
 @MainActor
 struct AgentServiceTests {
 
@@ -9,41 +29,75 @@ struct AgentServiceTests {
         Chat(id: "c1", title: "Hello", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
     }
 
-    @Test func insertsAgentMessageWhenCountIsPositive() async throws {
+    private func seedUserMessage(in repo: MockMessageRepository, chatId: String, timestamp: Int64 = 1000) {
+        repo.messagesByChat[chatId, default: []].append(
+            Message(id: UUID().uuidString, chatId: chatId, text: "Hi", type: .text, file: nil, sender: .user, timestamp: timestamp)
+        )
+    }
+
+    @Test func insertsAgentMessageWhenDeciderSaysReply() async throws {
         let msgRepo = MockMessageRepository()
         let chatRepo = MockChatRepository()
         let chat = makeChat()
         chatRepo.chats = [chat]
+        seedUserMessage(in: msgRepo, chatId: chat.id)
 
         let service = AgentService(
             messageRepository: msgRepo,
             chatRepository: chatRepo,
-            delayRange: 0.0...0.0
+            delayRange: 0.0...0.0,
+            decider: AlwaysReplyDecider()
         )
 
-        await service.handleUserMessage(userMessageCount: 1, chat: chat)
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
 
-        // With any RNG, count > 0 always triggers a reply per SimulateAgentReplyUseCase
         #expect(msgRepo.insertedMessages.count == 1)
         #expect(msgRepo.insertedMessages[0].sender == .agent)
         #expect(msgRepo.insertedMessages[0].chatId == "c1")
     }
 
-    @Test func skipsInsertWhenCountIsZero() async throws {
+    @Test func skipsInsertWhenNoUserMessages() async throws {
         let msgRepo = MockMessageRepository()
         let chatRepo = MockChatRepository()
         let chat = makeChat()
         chatRepo.chats = [chat]
+        // no messages seeded
 
         let service = AgentService(
             messageRepository: msgRepo,
             chatRepository: chatRepo,
-            delayRange: 0.0...0.0
+            delayRange: 0.0...0.0,
+            decider: AlwaysReplyDecider()
         )
 
-        await service.handleUserMessage(userMessageCount: 0, chat: chat)
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
         #expect(msgRepo.insertedMessages.isEmpty)
         #expect(chatRepo.updatedChat == nil)
+    }
+
+    @Test func skipsInsertWhenLastMessageIsFromAgent() async throws {
+        let msgRepo = MockMessageRepository()
+        let chatRepo = MockChatRepository()
+        let chat = makeChat()
+        chatRepo.chats = [chat]
+        // last message is agent — gap of user messages = 0
+        msgRepo.messagesByChat[chat.id] = [
+            Message(id: "m1", chatId: chat.id, text: "Hi", type: .text, file: nil, sender: .user, timestamp: 1000),
+            Message(id: "m2", chatId: chat.id, text: "Reply", type: .text, file: nil, sender: .agent, timestamp: 2000)
+        ]
+
+        let service = AgentService(
+            messageRepository: msgRepo,
+            chatRepository: chatRepo,
+            delayRange: 0.0...0.0,
+            decider: AlwaysReplyDecider()
+        )
+
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(msgRepo.insertedMessages.isEmpty)
     }
 
     @Test func updatesChatAfterReply() async throws {
@@ -51,13 +105,16 @@ struct AgentServiceTests {
         let chatRepo = MockChatRepository()
         let chat = makeChat()
         chatRepo.chats = [chat]
+        seedUserMessage(in: msgRepo, chatId: chat.id)
 
         let service = AgentService(
             messageRepository: msgRepo,
             chatRepository: chatRepo,
-            delayRange: 0.0...0.0
+            delayRange: 0.0...0.0,
+            decider: AlwaysReplyDecider()
         )
-        await service.handleUserMessage(userMessageCount: 1, chat: chat)
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
         #expect(chatRepo.updatedChat?.id == "c1")
         #expect((chatRepo.updatedChat?.lastMessageTimestamp ?? 0) > 0)
     }
@@ -67,58 +124,60 @@ struct AgentServiceTests {
         let chatRepo = MockChatRepository()
         let chat = makeChat()
         chatRepo.chats = [chat]
+        seedUserMessage(in: msgRepo, chatId: chat.id)
 
-        // Simulate title being updated in DB after the reply was triggered
         let renamedChat = Chat(id: "c1", title: "Renamed Title", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         try? await chatRepo.update(renamedChat)
 
         let service = AgentService(
             messageRepository: msgRepo,
             chatRepository: chatRepo,
-            delayRange: 0.0...0.0
+            delayRange: 0.0...0.0,
+            decider: AlwaysReplyDecider()
         )
-        // Pass original snapshot (stale title) — service should fetch fresh
-        await service.handleUserMessage(userMessageCount: 1, chat: chat)
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
         #expect(chatRepo.updatedChat?.title == "Renamed Title")
     }
 
-    @Test func insertedMessageIsEitherTextOrFile() async throws {
+    @Test func textReplyProducesTextMessage() async throws {
         let msgRepo = MockMessageRepository()
         let chatRepo = MockChatRepository()
         let chat = makeChat()
         chatRepo.chats = [chat]
+        seedUserMessage(in: msgRepo, chatId: chat.id)
 
         let service = AgentService(
             messageRepository: msgRepo,
             chatRepository: chatRepo,
-            delayRange: 0.0...0.0
+            delayRange: 0.0...0.0,
+            decider: AlwaysReplyDecider()
         )
-        await service.handleUserMessage(userMessageCount: 1, chat: chat)
-        let msg = msgRepo.insertedMessages[0]
-        #expect(msg.type == .text || msg.type == .file)
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
+        let msg = try #require(msgRepo.insertedMessages.first)
+        #expect(msg.type == .text)
+        #expect(msg.text == "Hello from agent")
     }
 
-    @Test func imageReplyHasFileAttachment() async throws {
-        // Use SimulateAgentReplyUseCase directly to verify image path ends up as .file message
+    @Test func imageReplyProducesFileMessage() async throws {
         let msgRepo = MockMessageRepository()
         let chatRepo = MockChatRepository()
         let chat = makeChat()
         chatRepo.chats = [chat]
+        seedUserMessage(in: msgRepo, chatId: chat.id)
 
-        // Run multiple times to hit both text and image branches; just verify structure is valid
         let service = AgentService(
             messageRepository: msgRepo,
             chatRepository: chatRepo,
-            delayRange: 0.0...0.0
+            delayRange: 0.0...0.0,
+            decider: AlwaysImageDecider()
         )
-        for i in 1...5 {
-            await service.handleUserMessage(userMessageCount: i, chat: chat)
-        }
-        // After 5 calls, we must have 5 inserted messages all from agent
-        #expect(msgRepo.insertedMessages.count == 5)
-        #expect(msgRepo.insertedMessages.allSatisfy { $0.sender == .agent })
-        // File messages must have a file attachment
-        let fileMessages = msgRepo.insertedMessages.filter { $0.type == .file }
-        #expect(fileMessages.allSatisfy { $0.file != nil })
+        service.handleUserMessage(chat: chat)
+        try await Task.sleep(for: .milliseconds(200))
+        let msg = try #require(msgRepo.insertedMessages.first)
+        #expect(msg.type == .file)
+        #expect(msg.file != nil)
+        #expect(msg.file?.path == "https://picsum.photos/400/300")
     }
 }

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ChatListView: View {
     @State private var viewModel: ChatListViewModel
-    @Environment(AppRouter.self) private var router
 
     init(
         chatRepository: any ChatRepositoryProtocol,
@@ -34,7 +33,7 @@ struct ChatListView: View {
                             .accessibilityIdentifier("chatRow_\(chat.id)")
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                router.push(.chatDetail(chatId: chat.id))
+                                viewModel.navigateToChat(chat)
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
@@ -62,5 +61,9 @@ struct ChatListView: View {
         .task {
             viewModel.startStream()
         }
+        .errorAlert(errorMessage: Binding(
+            get: { viewModel.errorMessage },
+            set: { _ in viewModel.dismissError() }
+        ))
     }
 }

@@ -41,4 +41,19 @@ struct CreateChatUseCaseTests {
         #expect(fetched.count == 1)
         #expect(fetched[0].id == chat.id)
     }
+
+    @Test func throwsWhenRepositoryFails() async throws {
+        let repo = MockChatRepository()
+        repo.shouldThrowError = ChatError.createFailed(underlying: nil)
+        repo.errorOnMethod = .create
+        let useCase = CreateChatUseCase(chatRepository: repo)
+
+        var threw = false
+        do {
+            _ = try await useCase.execute()
+        } catch {
+            threw = true
+        }
+        #expect(threw)
+    }
 }

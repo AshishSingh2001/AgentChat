@@ -6,42 +6,62 @@ final class MockMessageRepository: MessageRepositoryProtocol, @unchecked Sendabl
     var insertedMessages: [Message] = []
     var deletedChatIds: [String] = []
 
-    // Use makeStream so the continuation is available immediately — before the
-    // consumer's `for await` loop starts iterating. This prevents dropped yields
-    // when insert() is called before the stream Task has begun execution.
-    private var streams: [String: (stream: AsyncStream<[Message]>, continuation: AsyncStream<[Message]>.Continuation)] = [:]
+    var shouldThrowError: Error?
+    var errorOnMethod: ErrorMethod = .none
 
-    func fetchMessages(for chatId: String) async throws -> [Message] {
-        messagesByChat[chatId] ?? []
+    enum ErrorMethod {
+        case none
+        case insert
+        case delete
+        case fetch
     }
 
-    func messageStream(for chatId: String) -> AsyncStream<[Message]> {
-        if let existing = streams[chatId] {
+    private var newMessageStreams: [String: (stream: AsyncStream<Message>, continuation: AsyncStream<Message>.Continuation)] = [:]
+
+    func fetchMessages(for chatId: String, before: Int64?, limit: Int) async throws -> [Message] {
+        if let error = shouldThrowError, errorOnMethod == .fetch {
+            throw error
+        }
+        let all = (messagesByChat[chatId] ?? []).sorted { $0.timestamp < $1.timestamp }
+        let filtered = before.map { cursor in all.filter { $0.timestamp < cursor } } ?? all
+        return Array(filtered.suffix(limit))
+    }
+
+    func newMessageStream(for chatId: String) -> AsyncStream<Message> {
+        if let existing = newMessageStreams[chatId] {
             return existing.stream
         }
-        let (stream, continuation) = AsyncStream<[Message]>.makeStream()
-        streams[chatId] = (stream, continuation)
-        // Emit current snapshot immediately
-        continuation.yield(messagesByChat[chatId] ?? [])
+        let (stream, continuation) = AsyncStream<Message>.makeStream()
+        newMessageStreams[chatId] = (stream, continuation)
         return stream
     }
 
     func insert(_ message: Message) async throws {
+        if let error = shouldThrowError, errorOnMethod == .insert {
+            throw error
+        }
         insertedMessages.append(message)
         messagesByChat[message.chatId, default: []].append(message)
-        // Ensure stream exists for this chatId before yielding
-        if streams[message.chatId] == nil {
-            _ = messageStream(for: message.chatId)
+        if newMessageStreams[message.chatId] == nil {
+            _ = newMessageStream(for: message.chatId)
         }
-        streams[message.chatId]?.continuation.yield(messagesByChat[message.chatId] ?? [])
+        newMessageStreams[message.chatId]?.continuation.yield(message)
     }
 
     func deleteAll(for chatId: String) async throws {
+        if let error = shouldThrowError, errorOnMethod == .delete {
+            throw error
+        }
         deletedChatIds.append(chatId)
         messagesByChat[chatId] = nil
-        if streams[chatId] == nil {
-            _ = messageStream(for: chatId)
+    }
+
+    // Test helper — directly push a message into the stream without going through insert()
+    func simulateIncomingMessage(_ message: Message) {
+        messagesByChat[message.chatId, default: []].append(message)
+        if newMessageStreams[message.chatId] == nil {
+            _ = newMessageStream(for: message.chatId)
         }
-        streams[chatId]?.continuation.yield([])
+        newMessageStreams[message.chatId]?.continuation.yield(message)
     }
 }

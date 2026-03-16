@@ -34,6 +34,7 @@ struct ChatTests {
     @Test func chatsWithSameIDButDifferentFieldsAreNotEqual() {
         let chat1 = Chat(id: "abc", title: "A", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
         let chat2 = Chat(id: "abc", title: "B", lastMessage: "Different", lastMessageTimestamp: 999, createdAt: 0, updatedAt: 0)
+        // Synthesized equality compares all fields — different title/lastMessage means not equal
         #expect(chat1 != chat2)
     }
 

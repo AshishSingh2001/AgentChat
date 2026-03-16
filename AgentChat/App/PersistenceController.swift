@@ -1,38 +1,31 @@
 import Foundation
-import SwiftData
+import GRDB
 
-/// Owns the ModelContainer, vends repositories, and coordinates seed readiness.
+/// Owns the AppDatabase, vends repositories, and seeds initial data.
 @MainActor
 final class PersistenceController {
-    let container: ModelContainer
-    let chatRepository: SwiftDataChatRepository
-    let messageRepository: SwiftDataMessageRepository
-    let databaseInitializer: DatabaseInitializer
+    let appDatabase: AppDatabase
+    let chatRepository: GRDBChatRepository
+    let messageRepository: GRDBMessageRepository
 
     init() {
-        let initializer = DatabaseInitializer()
-        self.databaseInitializer = initializer
         do {
-            container = try ModelContainer(for: ChatEntity.self, MessageEntity.self)
+            appDatabase = try AppDatabase.onDisk()
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            fatalError("Failed to open database: \(error)")
         }
-        chatRepository = SwiftDataChatRepository(modelContainer: container, initializer: initializer)
-        messageRepository = SwiftDataMessageRepository(modelContainer: container, initializer: initializer)
+        chatRepository = GRDBChatRepository(appDatabase: appDatabase)
+        messageRepository = GRDBMessageRepository(appDatabase: appDatabase)
     }
 
-    /// Seeds data then marks the DB as ready, unblocking any pending repository calls.
-    func seed(resetForTesting: Bool = false) async {
-        let container = self.container
-        await Task.detached {
-            let seeder = SeedDataLoader(modelContainer: container)
-            if resetForTesting {
-                UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
-                try? await seeder.resetAndReload()
-            } else {
-                try? await seeder.loadIfNeeded()
-            }
-        }.value
-        await databaseInitializer.markReady()
+    /// Seeds data on first launch. Synchronous — GRDB migrations already ran in AppDatabase.init.
+    func seed(resetForTesting: Bool = false) {
+        let seeder = SeedDataLoader(appDatabase: appDatabase)
+        if resetForTesting {
+            UserDefaults.standard.removeObject(forKey: "agentchat.seedLoaded")
+            try? seeder.resetAndReload()
+        } else {
+            try? seeder.loadIfNeeded()
+        }
     }
 }

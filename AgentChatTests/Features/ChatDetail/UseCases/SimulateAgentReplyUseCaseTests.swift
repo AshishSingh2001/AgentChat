@@ -2,58 +2,69 @@ import Testing
 import Foundation
 @testable import AgentChat
 
-// Deterministic RNG: 0 maps to lower bound of any Int range, UInt64.max maps to upper bound.
-private struct FixedRNG: RandomNumberGenerator {
-    var values: [UInt64]
-    var index = 0
-
-    init(_ values: UInt64...) { self.values = values }
-
-    mutating func next() -> UInt64 {
-        defer { index = (index + 1) % values.count }
-        return values[index]
-    }
-}
-
 @MainActor
 struct SimulateAgentReplyUseCaseTests {
-    let useCase = SimulateAgentReplyUseCase()
 
-    // Any positive count always triggers a reply
-    @Test func positiveCountAlwaysReplies() {
-        var rng = FixedRNG(0)
-        let decision = useCase.decide(userMessageCount: 1, using: &rng)
-        #expect(decision.shouldReply == true)
-    }
-
-    @Test func zeroCountDoesNotReply() {
-        var rng = FixedRNG(0)
-        let decision = useCase.decide(userMessageCount: 0, using: &rng)
+    @Test func zeroCountNeverReplies() {
+        let useCase = SimulateAgentReplyUseCase()
+        var rng = SystemRandomNumberGenerator()
+        let decision = useCase.decide(userMessagesSinceLastReply: 0, using: &rng)
         #expect(decision.shouldReply == false)
     }
 
-    // Bool.random(using:) with next()=UInt64.max → false (text), next()=0 → index=0
-    @Test func repliesWithTextWhenRNGFavorsText() {
-        var rng = FixedRNG(UInt64.max, 0)
-        let decision = useCase.decide(userMessageCount: 1, using: &rng)
-        #expect(decision.shouldReply == true)
-        if case .text(let content) = decision.replyType {
-            #expect(!content.isEmpty)
-            #expect(SimulateAgentReplyUseCase.textResponses.contains(content))
-        } else {
-            Issue.record("Expected text reply")
+    // 1, 2, 3, 6, 7, 9 — not divisible by 4 or 5
+    @Test func doesNotReplyForNonTriggerCounts() {
+        let useCase = SimulateAgentReplyUseCase()
+        var rng = SystemRandomNumberGenerator()
+        for count in [1, 2, 3, 6, 7, 9] {
+            let decision = useCase.decide(userMessagesSinceLastReply: count, using: &rng)
+            #expect(decision.shouldReply == false, "Should not reply at count \(count)")
         }
     }
 
-    // Bool.random(using:) with next()=0 → true (image)
-    @Test func repliesWithImageWhenRNGFavorsImage() {
-        var rng = FixedRNG(0)
-        let decision = useCase.decide(userMessageCount: 1, using: &rng)
+    // 4 is the earliest trigger — fix interval to 4...4 to eliminate randomness
+    @Test func repliesAtCount4() {
+        let config = SimulateAgentReplyUseCase.Configuration(replyIntervalRange: 4...4, imageChancePercent: 0)
+        let useCase = SimulateAgentReplyUseCase(config: config)
+        var rng = SystemRandomNumberGenerator()
+        let decision = useCase.decide(userMessagesSinceLastReply: 4, using: &rng)
         #expect(decision.shouldReply == true)
-        if case .image(let url) = decision.replyType {
-            #expect(url == "https://picsum.photos/400/300")
-        } else {
-            Issue.record("Expected image reply")
+    }
+
+    // 5 triggers — fix interval to 5...5 to eliminate randomness
+    @Test func repliesAtCount5() {
+        let config = SimulateAgentReplyUseCase.Configuration(replyIntervalRange: 5...5, imageChancePercent: 0)
+        let useCase = SimulateAgentReplyUseCase(config: config)
+        var rng = SystemRandomNumberGenerator()
+        let decision = useCase.decide(userMessagesSinceLastReply: 5, using: &rng)
+        #expect(decision.shouldReply == true)
+    }
+
+    // imageChancePercent=100 → always image; fix interval to eliminate randomness
+    @Test func imageChance100AlwaysProducesImage() {
+        let config = SimulateAgentReplyUseCase.Configuration(replyIntervalRange: 4...4, imageChancePercent: 100)
+        let useCase = SimulateAgentReplyUseCase(config: config)
+        var rng = SystemRandomNumberGenerator()
+        let decision = useCase.decide(userMessagesSinceLastReply: 4, using: &rng)
+        #expect(decision.shouldReply == true)
+        guard case .image(let url) = decision.replyType else {
+            Issue.record("Expected image reply"); return
         }
+        #expect(url.hasPrefix("https://picsum.photos/seed/"))
+        #expect(url.hasSuffix("/400/300"))
+    }
+
+    // imageChancePercent=0 → always text; fix interval to eliminate randomness
+    @Test func imageChance0AlwaysProducesText() {
+        let config = SimulateAgentReplyUseCase.Configuration(replyIntervalRange: 4...4, imageChancePercent: 0)
+        let useCase = SimulateAgentReplyUseCase(config: config)
+        var rng = SystemRandomNumberGenerator()
+        let decision = useCase.decide(userMessagesSinceLastReply: 4, using: &rng)
+        #expect(decision.shouldReply == true)
+        guard case .text(let content) = decision.replyType else {
+            Issue.record("Expected text reply"); return
+        }
+        #expect(!content.isEmpty)
+        #expect(SimulateAgentReplyUseCase.textResponses.contains(content))
     }
 }

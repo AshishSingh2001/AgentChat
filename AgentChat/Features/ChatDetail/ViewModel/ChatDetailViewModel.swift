@@ -1,131 +1,133 @@
 import Foundation
 import SwiftUI
-import UIKit
 
 @Observable
 @MainActor
 final class ChatDetailViewModel {
-    // MARK: - Constants
-    private enum Constants {
-        static let scrollThreshold: CGFloat = 150
-        static let toastDismissDelay: TimeInterval = 3
-        static let draftDebounceDelay: Duration = .milliseconds(300)
-    }
+    // MARK: - Sub-VMs
+    let messages = MessageListViewModel()
+    let draft = DraftViewModel()
+    let title: TitleViewModel
+    let imageViewer = ImageViewerViewModel()
+    let scroll = MessageScrollCoordinator()
 
-    // MARK: - Published State
-    var messages: [Message] = []
-    var chat: Chat
-    var isTitleEditing = false
-    var shouldScrollToBottom = false
-    var showNewMessageToast = false
-    var isNearBottom = true
-    var draftText: String = "" {
-        didSet {
-            debouncedSaveDraft()
-        }
-    }
-    var selectedImageForViewer: ImageViewerItem?
-    var pendingAttachment: PendingAttachment?
+    // MARK: - Coordinator State
+    var errorMessage: String?
+
 
     // MARK: - Dependencies
+    private let chat: Chat
     private let chatRepository: any ChatRepositoryProtocol
     private let messageRepository: any MessageRepositoryProtocol
     private let router: any AppRouterProtocol
     private let sendMessageUseCase: SendMessageUseCase
-    private let sendAttachmentMessageUseCase: SendAttachmentMessageUseCase
     private let agentService: any AgentServiceProtocol
-    let fileStorageService: any FileStorageServiceProtocol
 
-    // MARK: - Internal State
-    private let chatId: String
-    private var userMessageCount = 0
-    private var pendingAgentTask: Task<Void, Never>?
-    private var toastTask: Task<Void, Never>?
-    private var draftSaveTask: Task<Void, Never>?
-    private var streamTask: Task<Void, Never>?
-
-    var displayTitle: String {
-        chat.title.isEmpty ? "New Chat" : chat.title
-    }
-
-    private var draftKey: String { "agentchat.draft.\(chatId)" }
+    private var pendingPaginationTask: Task<Void, Never>?
 
     // MARK: - Init
     init(
-        chatId: String,
+        chat: Chat,
         chatRepository: any ChatRepositoryProtocol,
         messageRepository: any MessageRepositoryProtocol,
         router: any AppRouterProtocol,
-        fileStorageService: any FileStorageServiceProtocol,
         agentService: any AgentServiceProtocol
     ) {
-        self.chatId = chatId
-        self.chat = Chat(id: chatId, title: "", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
+        self.chat = chat
         self.chatRepository = chatRepository
         self.messageRepository = messageRepository
         self.router = router
-        self.fileStorageService = fileStorageService
         self.agentService = agentService
         self.sendMessageUseCase = SendMessageUseCase(
             chatRepository: chatRepository,
             messageRepository: messageRepository
         )
-        self.sendAttachmentMessageUseCase = SendAttachmentMessageUseCase(
-            fileStorageService: fileStorageService,
-            sendMessageUseCase: self.sendMessageUseCase
-        )
-        loadDraftText()
+        self.title = TitleViewModel(chat: chat)
+        self.draft.text = chat.draftText
+        self.draft.configure(chat: chat, repository: chatRepository)
     }
-
-    // MARK: - Message Loading
+    
+    // MARK: - Loading
     func loadMessages() async {
-        if let loadedChat = try? await chatRepository.fetch(id: chatId) {
-            chat = loadedChat
+        messages.onNewMessage = { [weak self] msg in
+            self?.scroll.handleNewMessage(from: msg.sender, type: msg.type)
         }
 
-        // Fully reactive: stream is the single source of truth for messages[].
-        // Never append optimistically — wait for stream emission after each DB write.
-        streamTask?.cancel()
-        streamTask = Task {
-            for await updated in messageRepository.messageStream(for: chatId) {
-                guard !Task.isCancelled else { break }
-                let isNewMessage = updated.count > messages.count
-                messages = updated
-                if isNewMessage {
-                    handleNewMessage()
-                }
-            }
-        }
+        await messages.load(chatId: chat.id, repository: messageRepository)
     }
 
-    func loadDraftText() {
-        draftText = UserDefaults.standard.string(forKey: draftKey) ?? ""
-    }
-
-    private func saveDraftText() {
-        if draftText.isEmpty {
-            UserDefaults.standard.removeObject(forKey: draftKey)
-        } else {
-            UserDefaults.standard.set(draftText, forKey: draftKey)
-        }
-    }
-
-    private func debouncedSaveDraft() {
-        draftSaveTask?.cancel()
-        draftSaveTask = Task {
-            try? await Task.sleep(for: Constants.draftDebounceDelay)
+    func loadOlderMessages() {
+        pendingPaginationTask?.cancel()
+        pendingPaginationTask = Task {
+            try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            saveDraftText()
+            await messages.loadOlderMessages(chatId: chat.id, repository: messageRepository)
+        }
+    }
+
+    // MARK: - Sending
+    func sendMessage(text: String, file: FileAttachment? = nil) async {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty || file != nil else { return }
+
+        do {
+            let (sentMessage, updatedChat) = try await sendMessageUseCase.execute(
+                text: trimmed,
+                file: file,
+                chat: title.chat,
+                isFirstMessage: messages.messages.isEmpty
+            )
+            messages.appendIfAbsent(sentMessage)
+            title.chat = updatedChat
+            draft.configure(chat: updatedChat, repository: chatRepository)
+            draft.text = ""
+            draft.cancelPendingSave()
+            triggerAgentReply()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func triggerAgentReply() {
+        agentService.handleUserMessage(chat: title.chat)
+    }
+
+    // MARK: - Title Editing
+    func commitTitleEdit(newTitle: String) async {
+        do {
+            try await title.commitEdit(newTitle: newTitle, repository: chatRepository)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Cleanup
+    func cleanUpIfEmpty() {
+        guard messages.messages.isEmpty && draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        Task {
+            try? await chatRepository.delete(id: chat.id)
         }
     }
 
     func saveDraftImmediately() {
-        draftSaveTask?.cancel()
-        saveDraftText()
+        draft.saveImmediately()
+    }
+
+    // MARK: - Error
+    func dismissError() {
+        errorMessage = nil
+    }
+
+    // MARK: - Image Viewer (forwarding)
+    func openImageViewer(url: URL) {
+        imageViewer.open(url: url)
+    }
+
+    func dismissImageViewer() {
+        imageViewer.dismiss()
     }
 
     // MARK: - Binding Helper
-
     func binding<Value>(
         for keyPath: ReferenceWritableKeyPath<ChatDetailViewModel, Value>,
         setter: ((Value) -> Void)? = nil
@@ -141,127 +143,4 @@ final class ChatDetailViewModel {
             }
         )
     }
-
-    // MARK: - Sending
-    func sendMessage(text: String, file: FileAttachment? = nil) async {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty || file != nil else { return }
-
-        guard let (_, updatedChat) = try? await sendMessageUseCase.execute(
-            text: trimmed,
-            file: file,
-            chat: chat,
-            isFirstMessage: messages.isEmpty
-        ) else { return }
-
-        chat = updatedChat
-        userMessageCount += 1
-        draftText = ""
-        triggerAgentReply(for: userMessageCount)
-    }
-
-    // MARK: - Agent Reply
-    private func triggerAgentReply(for count: Int) {
-        pendingAgentTask?.cancel()
-        pendingAgentTask = Task {
-            await agentService.handleUserMessage(userMessageCount: count, chat: chat)
-        }
-    }
-
-    // MARK: - Scroll
-    func updateScrollOffset(_ offsetFromBottom: CGFloat) {
-        isNearBottom = offsetFromBottom < Constants.scrollThreshold
-    }
-
-    private func handleNewMessage() {
-        if isNearBottom {
-            shouldScrollToBottom = true
-        } else {
-            showNewMessageToast = true
-            scheduleToastDismiss()
-        }
-    }
-
-    // MARK: - Toast
-    private func scheduleToastDismiss() {
-        toastTask?.cancel()
-        toastTask = Task {
-            try? await Task.sleep(for: .seconds(Constants.toastDismissDelay))
-            guard !Task.isCancelled else { return }
-            showNewMessageToast = false
-        }
-    }
-
-    func dismissToast() {
-        toastTask?.cancel()
-        toastTask = nil
-        showNewMessageToast = false
-    }
-
-    // MARK: - Title Editing
-    func startTitleEdit() {
-        isTitleEditing = true
-    }
-
-    func commitTitleEdit(newTitle: String) async {
-        let trimmed = newTitle.trimmingCharacters(in: .whitespaces)
-        isTitleEditing = false
-        guard !trimmed.isEmpty else { return }
-        chat = Chat(
-            id: chat.id,
-            title: trimmed,
-            lastMessage: chat.lastMessage,
-            lastMessageTimestamp: chat.lastMessageTimestamp,
-            createdAt: chat.createdAt,
-            updatedAt: chat.updatedAt
-        )
-        try? await chatRepository.update(chat)
-    }
-
-    // MARK: - Image Viewer
-    func openImageViewer(for file: FileAttachment) {
-        let url: URL?
-        if file.path.hasPrefix("http") {
-            url = URL(string: file.path)
-        } else {
-            url = fileStorageService.absoluteURL(for: file.path)
-        }
-        guard let resolvedURL = url else { return }
-        selectedImageForViewer = ImageViewerItem(url: resolvedURL)
-    }
-
-    func dismissImageViewer() {
-        selectedImageForViewer = nil
-    }
-
-    // MARK: - Pending Attachment
-    func setPendingAttachment(_ attachment: PendingAttachment) {
-        pendingAttachment = attachment
-    }
-
-    func clearPendingAttachment() {
-        pendingAttachment = nil
-    }
-
-    func sendWithAttachment() async {
-        guard let attachment = pendingAttachment else { return }
-        pendingAttachment = nil
-
-        guard let (_, updatedChat) = try? await sendAttachmentMessageUseCase.execute(
-            attachment: attachment,
-            text: draftText.trimmingCharacters(in: .whitespaces),
-            chat: chat,
-            isFirstMessage: messages.isEmpty
-        ) else { return }
-
-        chat = updatedChat
-        userMessageCount += 1
-        draftText = ""
-        triggerAgentReply(for: userMessageCount)
-    }
-}
-
-struct PendingAttachment {
-    let data: Data
-    let previewImage: UIImage
 }

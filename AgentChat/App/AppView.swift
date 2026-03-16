@@ -17,9 +17,9 @@ struct AppView: View {
             )
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
-                case .chatDetail(let chatId):
+                case .chatDetail(let chat):
                     ChatDetailView(
-                        chatId: chatId,
+                        chat: chat,
                         chatRepository: chatRepository,
                         messageRepository: messageRepository,
                         router: router,

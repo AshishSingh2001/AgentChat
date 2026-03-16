@@ -3,10 +3,6 @@ import SwiftUI
 struct ChatRowView: View {
     let chat: Chat
 
-    private var draftText: String? {
-        UserDefaults.standard.string(forKey: "agentchat.draft.\(chat.id)")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -18,8 +14,8 @@ struct ChatRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if let draft = draftText, !draft.isEmpty {
-                Text("Draft: \(draft)")
+            if !chat.draftText.isEmpty {
+                Text("Draft: \(chat.draftText)")
                     .font(.subheadline)
                     .foregroundStyle(.blue)
                     .lineLimit(2)

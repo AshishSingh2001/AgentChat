@@ -19,7 +19,7 @@ struct MessageBubbleView: View {
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 if message.type == .file, let file = message.file {
-                    ImageMessageView(file: file, fileStorageService: fileStorageService) {
+                    ImageMessageView(file: file, fileStorageService: fileStorageService, caption: message.text) {
                         onImageTap?(file)
                     }
                     .frame(maxWidth: 240)
@@ -40,6 +40,7 @@ struct MessageBubbleView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("message_\(message.id)")
     }
 }

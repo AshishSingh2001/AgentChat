@@ -1,6 +1,8 @@
 # AgentChat
 
-An offline-first multi-chat iOS app where users converse with a simulated AI agent. Built with SwiftUI + SwiftData.
+AgentChat is an offline-first multi-chat iOS app where users have conversations with a simulated AI agent. Every message, image, and chat is persisted locally — there is no network dependency, no sign-in, and no loading states. The app launches straight into your chats.
+
+The agent replies automatically after a short delay, occasionally responding with images. It debounces on rapid sends, counts the gap since its last reply to decide when to respond, and updates the chat list preview in real time. The UI is built entirely in SwiftUI with Clean Architecture + MVVM, GRDB for persistence, and reactive streams as the sole source of truth for the message list.
 
 ---
 
@@ -11,7 +13,7 @@ An offline-first multi-chat iOS app where users converse with a simulated AI age
 3. Select the `AgentChat` scheme and any iPhone simulator (iOS 26.2+)
 4. Run — seed data loads automatically on first launch
 
-No external setup required. SDWebImageSwiftUI is fetched automatically via Swift Package Manager.
+No external setup required. SDWebImageSwiftUI and GRDB are fetched automatically via Swift Package Manager.
 
 ---
 
@@ -20,32 +22,34 @@ No external setup required. SDWebImageSwiftUI is fetched automatically via Swift
 **Clean Architecture + MVVM**, with feature-first folder organisation.
 
 ```
-Presentation (Views + ViewModels)    @MainActor
+Presentation (Views + ViewModels)      @MainActor
        ↓ depends on
-Domain (UseCases + Models + Protocols)    pure Swift
+Domain (UseCases + Models + Protocols) pure Swift
        ↓ depends on
-Data (SwiftData Entities + Repositories)  @ModelActor
+Data (GRDB Entities + Repositories)    thread-safe, Sendable
 ```
 
 ### Layers
 
 | Layer | Contents | Rule |
 |---|---|---|
-| `Domain/` | `Chat`, `Message` structs; repository protocols | Pure Swift — zero UIKit/SwiftData imports |
-| `Data/` | `@Model` entities; `@ModelActor` repositories; seed loader | Implements domain protocols |
+| `Domain/` | `Chat`, `Message` structs; repository protocols | Pure Swift — zero UIKit/GRDB imports |
+| `Data/` | GRDB records; repositories; seed loader | Implements domain protocols |
 | `Features/*/UseCases/` | Business logic only | Stateless — no Tasks, no timers |
 | `Features/*/` | Views + `@Observable @MainActor` ViewModels | Owns UI state + async Task lifecycle |
+| `Services/` | `AgentService` (actor), `FileStorageService` | Cross-cutting, injected at root |
 | `Navigation/` | `AppRoute` enum + `AppRouter` | All navigation through one router |
 
 ### Concurrency
 
-- Repositories: `@ModelActor` — safe SwiftData access, returns `Sendable` domain structs
+- Repositories: `final class @unchecked Sendable` backed by GRDB `DatabaseQueue` — safe concurrent access, returns `Sendable` domain structs
 - ViewModels: `@MainActor` — drives SwiftUI state
-- Domain structs: fully immutable (`let` properties), `Sendable` — cross the actor boundary safely
+- `AgentService`: Swift `actor` — thread-safe, debounces internally, fire-and-forget entry point
+- Domain structs: fully immutable (`let` properties), `Sendable` — cross actor boundaries safely
 
 ### Navigation
 
-`NavigationPath` + typed `AppRoute` enum. A single `AppRouter` (@Observable) is injected via `.environment`. ViewModels push routes; views never navigate directly. Image viewer is `.fullScreenCover` (modal), not a stack push.
+`NavigationPath` + typed `AppRoute` enum. A single `AppRouter` (`@Observable`) is injected via `.environment`. ViewModels push routes; views never navigate directly. Image viewer uses `.fullScreenCover` (modal).
 
 ### Use Cases
 
@@ -53,48 +57,7 @@ Data (SwiftData Entities + Repositories)  @ModelActor
 |---|---|
 | `CreateChatUseCase` | Generates UUID, sets timestamps and placeholder title |
 | `SendMessageUseCase` | Inserts message + updates chat metadata + auto-titles on first message |
-| `SimulateAgentReplyUseCase` | Pure: given message count + injectable RNG → should reply? what type? |
-
-Simple CRUD reads/deletes go directly from ViewModel to repository.
-
----
-
-## Features
-
-- **Chat list** — sorted by last message timestamp, smart relative timestamps, swipe-to-delete, draft preview
-- **Chat detail** — message bubbles (user right/blue, agent left/gray), auto-scroll with 150px threshold, "New message" toast
-- **AI agent** — replies after every user message (1-2s delay); randomly text or image; debounced on rapid sends
-- **Image messages** — send from gallery or camera with preview; stored locally in Documents; fullscreen viewer with pinch-to-zoom and swipe-to-dismiss
-- **Offline-first** — all data local via SwiftData; loads instantly with no loading states
-- **Empty states** — chat list and chat detail show helpful prompts when empty
-- **Error states** — failed image loads show a broken-image icon with "Image unavailable" caption
-- **Bonus** — editable chat title (tap nav bar), draft persistence per chat
-
----
-
-## Testing
-
-Swift Testing framework. Run with Cmd+U in Xcode. Tests cover:
-
-- Domain model invariants (`Chat`, `Message`, `FileAttachment`)
-- `@ModelActor` repositories via in-memory `ModelContainer`
-- All 3 use cases with injected mock repositories
-- `ChatListViewModel` and `ChatDetailViewModel` with mock use cases + mock router
-- `TimestampFormatter` (both relative and absolute formats)
-- `FileStorageService` with injected temp directory
-
-Nothing in unit tests touches the real SwiftData store or filesystem.
-
----
-
-## Assumptions
-
-- Agent always replies to user messages — cancelled and re-scheduled on rapid sends (<1.5s)
-- Chat title: auto-set from first 30 chars of user's first message; editable at any time
-- File paths stored relative (filename only), resolved to absolute on display — portable across reinstalls
-- Chats 2 & 3 in seed data have generated messages so they are not empty on first open
-- Image viewer presented modally (fullScreenCover), matching platform convention
-- Scroll threshold of 150px from bottom for auto-scroll vs toast notification
+| `SimulateAgentReplyUseCase` | Pure: given user message gap + injectable RNG → should reply? what type? |
 
 ---
 

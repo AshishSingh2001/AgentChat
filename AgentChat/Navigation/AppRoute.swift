@@ -1,3 +1,3 @@
 enum AppRoute: Hashable {
-    case chatDetail(chatId: String)
+    case chatDetail(chat: Chat)
 }

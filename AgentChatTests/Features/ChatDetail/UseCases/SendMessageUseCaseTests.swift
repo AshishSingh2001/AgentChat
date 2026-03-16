@@ -92,4 +92,57 @@ struct SendMessageUseCaseTests {
         }
         #expect(threw)
     }
+
+    @Test func emptyMessageErrorDescription() {
+        #expect(SendMessageError.emptyMessage.localizedDescription == "Message cannot be empty")
+    }
+
+    @Test func messageRepositoryErrorPropagates() async throws {
+        let chatRepo = MockChatRepository()
+        let msgRepo = MockMessageRepository()
+        msgRepo.shouldThrowError = MessageError.sendFailed(underlying: nil)
+        msgRepo.errorOnMethod = .insert
+        let useCase = SendMessageUseCase(chatRepository: chatRepo, messageRepository: msgRepo)
+        let chat = makeChat()
+        chatRepo.chats = [chat]
+
+        var threw = false
+        do {
+            _ = try await useCase.execute(text: "Hello", chat: chat, isFirstMessage: true)
+        } catch {
+            threw = true
+        }
+        #expect(threw)
+    }
+
+    @Test func chatRepositoryUpdateErrorPropagates() async throws {
+        let chatRepo = MockChatRepository()
+        let msgRepo = MockMessageRepository()
+        chatRepo.shouldThrowError = ChatError.updateFailed(underlying: nil)
+        chatRepo.errorOnMethod = .update
+        let useCase = SendMessageUseCase(chatRepository: chatRepo, messageRepository: msgRepo)
+        let chat = makeChat()
+        chatRepo.chats = [chat]
+
+        var threw = false
+        do {
+            _ = try await useCase.execute(text: "Hello", chat: chat, isFirstMessage: true)
+        } catch {
+            threw = true
+        }
+        #expect(threw)
+    }
+
+    @Test func attachmentOnlyMessageUsesAttachmentPreview() async throws {
+        let chatRepo = MockChatRepository()
+        let msgRepo = MockMessageRepository()
+        let useCase = SendMessageUseCase(chatRepository: chatRepo, messageRepository: msgRepo)
+        let chat = makeChat()
+        chatRepo.chats = [chat]
+        let file = FileAttachment(path: "img.jpg", fileSize: 100, thumbnailPath: nil)
+
+        let (message, updatedChat) = try await useCase.execute(text: "", file: file, chat: chat, isFirstMessage: true)
+        #expect(message.type == .file)
+        #expect(updatedChat.lastMessage == "Attachment")
+    }
 }

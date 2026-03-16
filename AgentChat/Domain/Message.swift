@@ -41,11 +41,11 @@ struct Message: Identifiable, Hashable, Sendable {
     let sender: Sender
     let timestamp: Int64
 
-    nonisolated func hash(into hasher: inout Hasher) {
+    func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
 
-    nonisolated static func == (lhs: Message, rhs: Message) -> Bool {
+    static func == (lhs: Message, rhs: Message) -> Bool {
         lhs.id == rhs.id
     }
 }

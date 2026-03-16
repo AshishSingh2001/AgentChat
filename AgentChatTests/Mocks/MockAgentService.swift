@@ -3,21 +3,17 @@ import Foundation
 
 final class MockAgentService: AgentServiceProtocol, @unchecked Sendable {
     var handleUserMessageCalled = false
-    var lastUserMessageCount: Int?
     var lastChat: Chat?
     var shouldReply = false
     var replyMessage: Message?
     var replyDelay: Duration = .milliseconds(50)
 
     // Optional closure to inject custom reply behaviour per test
-    var onHandleUserMessage: ((Int, Chat) async -> Void)?
+    var onHandleUserMessage: ((Chat) -> Void)?
 
-    func handleUserMessage(userMessageCount: Int, chat: Chat) async {
+    func handleUserMessage(chat: Chat) {
         handleUserMessageCalled = true
-        lastUserMessageCount = userMessageCount
         lastChat = chat
-        if let handler = onHandleUserMessage {
-            await handler(userMessageCount, chat)
-        }
+        onHandleUserMessage?(chat)
     }
 }

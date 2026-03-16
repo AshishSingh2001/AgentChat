@@ -5,6 +5,7 @@ import Foundation
 final class ChatListViewModel {
     var chats: [Chat] = []
     var isLoading = true
+    var errorMessage: String?
 
     private let chatRepository: any ChatRepositoryProtocol
     private let messageRepository: any MessageRepositoryProtocol
@@ -36,14 +37,28 @@ final class ChatListViewModel {
         }
     }
 
+    func navigateToChat(_ chat: Chat) {
+        router.push(.chatDetail(chat: chat))
+    }
+
     func createNewChat() async {
-        guard let chat = try? await createChatUseCase.execute() else { return }
-        // Stream will update chats[]; navigate immediately since chat is already in DB
-        router.push(.chatDetail(chatId: chat.id))
+        do {
+            let chat = try await createChatUseCase.execute()
+            router.push(.chatDetail(chat: chat))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func deleteChat(_ chat: Chat) async {
-        // Stream will remove it reactively after DB delete
-        try? await deleteChatUseCase.execute(chatId: chat.id)
+        do {
+            try await deleteChatUseCase.execute(chatId: chat.id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func dismissError() {
+        errorMessage = nil
     }
 }

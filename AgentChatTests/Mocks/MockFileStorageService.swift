@@ -4,8 +4,10 @@ import Foundation
 final class MockFileStorageService: FileStorageServiceProtocol, @unchecked Sendable {
     var savedFiles: [String: Data] = [:]
     var thumbnailData: Data = Data()
+    var shouldThrowOnSave: Error?
 
     func save(data: Data, filename: String) throws -> String {
+        if let error = shouldThrowOnSave { throw error }
         savedFiles[filename] = data
         return filename
     }

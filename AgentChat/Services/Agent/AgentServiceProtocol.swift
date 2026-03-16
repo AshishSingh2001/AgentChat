@@ -1,5 +1,9 @@
 import Foundation
 
 protocol AgentServiceProtocol: Sendable {
-    func handleUserMessage(userMessageCount: Int, chat: Chat) async
+    func handleUserMessage(chat: Chat)
+}
+
+protocol AgentDecider: Sendable {
+    nonisolated func decide(userMessagesSinceLastReply: Int, using rng: inout some RandomNumberGenerator) -> AgentReplyDecision
 }

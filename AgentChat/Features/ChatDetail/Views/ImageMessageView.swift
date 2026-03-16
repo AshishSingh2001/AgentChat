@@ -4,13 +4,15 @@ import SDWebImageSwiftUI
 struct ImageMessageView: View {
     let file: FileAttachment
     let fileStorageService: any FileStorageServiceProtocol
+    let caption: String
     let onTap: () -> Void
 
     private var imageURL: URL? {
-        if file.path.hasPrefix("http") {
-            return URL(string: file.path)
+        let displayPath = file.thumbnailPath ?? file.path
+        if displayPath.hasPrefix("http") {
+            return URL(string: displayPath)
         } else {
-            return fileStorageService.absoluteURL(for: file.path)
+            return fileStorageService.absoluteURL(for: displayPath)
         }
     }
 
@@ -48,11 +50,12 @@ struct ImageMessageView: View {
                 .onFailure { _ in loadFailed = true }
                 .indicator(.activity)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityIdentifier("imageMessage")
                 .onTapGesture { onTap() }
             }
 
-            if file.fileSize > 0 {
-                Text(file.formattedFileSize)
+            if !caption.isEmpty {
+                Text(caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
