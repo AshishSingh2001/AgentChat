@@ -9,9 +9,10 @@ struct ChatDetailViewModelTests {
     private static let defaultChat = Chat(id: "c1", title: "New Chat", lastMessage: "", lastMessageTimestamp: 0, createdAt: 0, updatedAt: 0)
 
     private func makeVM(
-        chat: Chat = defaultChat,
+        chat: Chat? = nil,
         agentService: MockAgentService? = nil
     ) -> (ChatDetailViewModel, MockChatRepository, MockMessageRepository, MockAgentService) {
+        let chat = chat ?? Self.defaultChat
         let chatRepo = MockChatRepository()
         let msgRepo = MockMessageRepository()
         let agent = agentService ?? MockAgentService()

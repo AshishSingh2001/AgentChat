@@ -45,8 +45,7 @@ struct SimulateAgentReplyUseCase: AgentDecider {
             return AgentReplyDecision(shouldReply: false, replyType: .text(""))
         }
 
-        let interval = Int.random(in: config.replyIntervalRange, using: &rng)
-        guard userMessageCount % interval == 0 else {
+        guard userMessageCount % 4 == 0 || userMessageCount % 5 == 0 else {
             return AgentReplyDecision(shouldReply: false, replyType: .text(""))
         }
 

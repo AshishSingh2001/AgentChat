@@ -46,6 +46,7 @@ All unit tests use in-memory state (no real database, no real filesystem). Mocks
 - Throws on repository failure
 
 #### `SimulateAgentReplyUseCaseTests`
+
 - Returns `shouldReply: false` for count = 0
 - Returns `shouldReply: false` for non-trigger counts: 1, 2, 3, 6, 7, 9
 - Returns `shouldReply: true` at count = 4 (multiple of 4)

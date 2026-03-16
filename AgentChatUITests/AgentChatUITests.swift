@@ -274,7 +274,6 @@ final class AgentChatUITests: XCTestCase {
         let dragEnd = lastBubble.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 5.0))
         bubbleCenter.press(forDuration: 0.05, thenDragTo: dragEnd)
         bubbleCenter.press(forDuration: 0.05, thenDragTo: dragEnd)
-        bubbleCenter.press(forDuration: 0.05, thenDragTo: dragEnd)
 
         // Agent reply arrives (6–8s delay) → toast appears because isNearBottom == false
         XCTAssertTrue(app.buttons["newMessageToastButton"].waitForExistence(timeout: 15))
@@ -308,7 +307,6 @@ final class AgentChatUITests: XCTestCase {
         XCTAssertTrue(lastBubble.waitForExistence(timeout: 3))
         let bubbleCenter = lastBubble.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let dragEnd = lastBubble.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 5.0))
-        bubbleCenter.press(forDuration: 0.05, thenDragTo: dragEnd)
         bubbleCenter.press(forDuration: 0.05, thenDragTo: dragEnd)
         bubbleCenter.press(forDuration: 0.05, thenDragTo: dragEnd)
 
